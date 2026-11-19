@@ -35,6 +35,15 @@ class TaskRulesTest {
         assertFalse(TaskRules.isDueTodayOrOverdue(item.copy(completedAt = now), now, zone))
     }
 
+    @Test fun `reminder text says due now right after the due time`() {
+        val zone = ZoneId.of("America/Sao_Paulo")
+        val due = LocalDate.of(2026, 11, 19).atTime(11, 27).atZone(zone).toInstant().toEpochMilli()
+        assertEquals("Vence agora · 11:27", TaskRules.reminderDueText(due, due + 9_000, zone))
+        assertEquals("Vence agora · 11:27", TaskRules.reminderDueText(due, due + 14 * 60_000, zone))
+        assertEquals("Atrasada", TaskRules.reminderDueText(due, due + 16 * 60_000, zone))
+        assertEquals("Hoje 11:27", TaskRules.reminderDueText(due, due - 60_000, zone))
+    }
+
     @Test fun `due status buckets relative days`() {
         val zone = ZoneId.of("America/Sao_Paulo")
         fun at(day: Int, hour: Int) = LocalDate.of(2026, 11, day).atTime(hour, 0).atZone(zone).toInstant().toEpochMilli()

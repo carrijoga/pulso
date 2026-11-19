@@ -90,6 +90,19 @@ object TaskRules {
         }
     }
 
+    /** Reminders arrive a little after the due time; within this window the notification says "Vence agora". */
+    const val JUST_DUE_WINDOW_MILLIS = 15 * 60_000L
+
+    /** Due text for a reminder notification: "Vence agora · HH:mm" right at the due time, otherwise [dueLabel]. */
+    fun reminderDueText(dueAt: Long, nowMillis: Long, zone: ZoneId): String {
+        val late = nowMillis - dueAt
+        if (late in 0 until JUST_DUE_WINDOW_MILLIS) {
+            val time = Instant.ofEpochMilli(dueAt).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
+            return "Vence agora · $time"
+        }
+        return dueLabel(dueAt, nowMillis, zone).text
+    }
+
     /** Due instant for a local date and time in the user's zone (DST gaps resolved by java.time). */
     fun dueAtFor(date: LocalDate, time: LocalTime, zone: ZoneId): Long =
         date.atTime(time).atZone(zone).toInstant().toEpochMilli()

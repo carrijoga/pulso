@@ -89,6 +89,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -213,7 +215,11 @@ fun PulsoScreens(vm: PulsoViewModel) {
             AnimatedVisibility(overlay == null && tab != Tab.SETTINGS,
                 enter = scaleIn(PulsoMotion.bouncy()) + fadeIn(), exit = scaleOut() + fadeOut()) {
                 val newTask = tab == Tab.TASKS
+                val fabLabel = if (newTask) "Nova tarefa" else "Capturar"
                 ExtendedFloatingActionButton(
+                    // The FAB's inner text is not exposed to accessibility (seen with TalkBack on the Moto G84),
+                    // so the label goes on the button itself.
+                    modifier = Modifier.semantics { contentDescription = fabLabel },
                     onClick = {
                         if (newTask) editorKey = "new"
                         else context.startActivity(Intent(context, CaptureActivity::class.java))
@@ -222,7 +228,7 @@ fun PulsoScreens(vm: PulsoViewModel) {
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     icon = { Icon(if (newTask) Icons.Rounded.Add else Icons.Rounded.EditNote, contentDescription = null) },
-                    text = { Text(if (newTask) "Nova tarefa" else "Capturar") })
+                    text = { Text(fabLabel) })
             }
         },
         bottomBar = {

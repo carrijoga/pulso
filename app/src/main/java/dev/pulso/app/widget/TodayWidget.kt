@@ -3,6 +3,8 @@ package dev.pulso.app.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,6 +25,8 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -55,9 +59,11 @@ import java.time.ZoneId
 
 private val TASK_ID = ActionParameters.Key<String>("task_id")
 
-private val SMALL = DpSize(110.dp, 110.dp)
-private val MEDIUM = DpSize(250.dp, 110.dp)
-private val LARGE = DpSize(250.dp, 260.dp)
+private val COMPACT = DpSize(110.dp, 110.dp)
+/** From this width the list layout fits; below it only count + capture. */
+private val LIST = DpSize(250.dp, 110.dp)
+/** Rows in the scrollable list; the rest is one tap away in the app. */
+private const val MAX_LIST_ITEMS = 30
 
 // Mirrors res/values*/colors.xml widget_* (resource-based ColorProvider is restricted API in Glance).
 private val onSurface = ColorProvider(day = Color(0xFF231917), night = Color(0xFFF1DFDB))
@@ -66,35 +72,39 @@ private val overdueColor = ColorProvider(day = Color(0xFFBA1A1A), night = Color(
 private val todayColor = ColorProvider(day = Color(0xFF8A5100), night = Color(0xFFFFB960))
 
 class TodayWidget : GlanceAppWidget() {
-    /** Small: count + capture. Medium: 3 tasks. Large: up to 6 tasks. */
-    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, LARGE))
+    /**
+     * Narrow: count + capture. Wider: header + a scrollable list that fills whatever height the launcher
+     * gives. Launchers report heights unreliably (the Moto G84 launcher reported 113dp for a 155dp widget),
+     * so the list never assumes a row count and never clips a row.
+     */
+    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(COMPACT, LIST))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val tasks = (context.applicationContext as PulsoApplication).container.repository
-            .observeTasks().first()
-        val now = System.currentTimeMillis()
-        val zone = ZoneId.systemDefault()
-        // Overdue/today first, then the rest: same ordering as the app's Hoje screen.
-        val active = TaskRules.agenda(tasks, now, zone)
-        provideContent { WidgetContent(context, active, now, zone) }
+        val source = (context.applicationContext as PulsoApplication).container.repository.observeTasks()
+        val initial = source.first()
+        provideContent {
+            // Collected inside the session: an update while the session is alive (e.g. right after
+            // completing from the widget) recomposes with fresh data instead of the first snapshot.
+            val tasks by source.collectAsState(initial)
+            val now = System.currentTimeMillis()
+            val zone = ZoneId.systemDefault()
+            // Overdue/today first, then the rest: same ordering as the app's Hoje screen.
+            WidgetContent(context, TaskRules.agenda(tasks, now, zone), now, zone)
+        }
     }
 }
 
 @Composable
 private fun WidgetContent(context: Context, active: List<TaskItem>, now: Long, zone: ZoneId) {
     val size = LocalSize.current
-    val maxRows = when {
-        size.width < MEDIUM.width -> 0
-        size.height >= LARGE.height -> 6
-        else -> 3
-    }
+    val compact = size.width < LIST.width
     val dueCount = active.count { TaskRules.isDueTodayOrOverdue(it, now, zone) }
     Column(
         GlanceModifier.fillMaxSize().appWidgetBackground().background(ImageProvider(R.drawable.widget_background))
             .cornerRadius(28.dp).padding(14.dp)
     ) {
-        Header(context, active.size, dueCount, compact = maxRows == 0)
-        if (maxRows > 0) {
+        Header(context, active.size, dueCount, compact = compact)
+        if (!compact) {
             Spacer(GlanceModifier.height(8.dp))
             if (active.isEmpty()) {
                 Row(GlanceModifier.fillMaxWidth().background(ImageProvider(R.drawable.widget_row)).cornerRadius(18.dp)
@@ -107,14 +117,21 @@ private fun WidgetContent(context: Context, active: List<TaskItem>, now: Long, z
                     }
                 }
             } else {
-                active.take(maxRows).forEach { task ->
-                    TaskRow(context, task, now, zone)
-                    Spacer(GlanceModifier.height(6.dp))
-                }
-                if (active.size > maxRows) {
-                    Text("+${active.size - maxRows} no app",
-                        style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp),
-                        modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>()))
+                val shown = active.take(MAX_LIST_ITEMS)
+                LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
+                    items(shown, itemId = { it.id.hashCode().toLong() }) { task ->
+                        Column {
+                            TaskRow(context, task, now, zone)
+                            Spacer(GlanceModifier.height(6.dp))
+                        }
+                    }
+                    if (active.size > shown.size) {
+                        item {
+                            Text("+${active.size - shown.size} no app",
+                                style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp),
+                                modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>()))
+                        }
+                    }
                 }
             }
         }
@@ -125,26 +142,28 @@ private fun WidgetContent(context: Context, active: List<TaskItem>, now: Long, z
 private fun Header(context: Context, pending: Int, due: Int, compact: Boolean) {
     val summary = when {
         pending == 0 -> "Nada pendente"
-        due > 0 -> "$due para hoje · $pending pendentes"
-        else -> "$pending pendentes"
+        due > 0 -> "$due para hoje · $pending ${if (pending == 1) "pendente" else "pendentes"}"
+        else -> "$pending ${if (pending == 1) "pendente" else "pendentes"}"
     }
     val open = actionStartActivity<MainActivity>()
     if (compact) {
-        Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+        // Whole card opens the app (bigger target than the number); the + keeps its own action.
+        Column(GlanceModifier.fillMaxSize().clickable(open), horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically) {
-            Text("$pending", modifier = GlanceModifier.clickable(open),
+            Text("$pending",
                 style = TextStyle(color = onSurface, fontSize = 28.sp, fontWeight = FontWeight.Bold))
-            Text(if (due > 0) "$due hoje" else "pendentes",
+            Text(if (due > 0) "$due hoje" else if (pending == 1) "pendente" else "pendentes",
                 style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp))
             Spacer(GlanceModifier.height(6.dp))
             AddButton(context)
         }
         return
     }
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    // Whole header row (48dp tall, set by the + button) opens the app; the + keeps its own action.
+    Row(GlanceModifier.fillMaxWidth().clickable(open), verticalAlignment = Alignment.CenterVertically) {
         Image(ImageProvider(R.drawable.ic_pulso_mark), contentDescription = null,
             modifier = GlanceModifier.size(28.dp))
-        Column(GlanceModifier.defaultWeight().padding(start = 10.dp).clickable(open)) {
+        Column(GlanceModifier.defaultWeight().padding(start = 10.dp)) {
             Text("Hoje", style = TextStyle(color = onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold))
             Text(summary, style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
         }
@@ -173,8 +192,9 @@ private fun TaskRow(context: Context, task: TaskItem, now: Long, zone: ZoneId) {
         else -> onSurfaceVariant
     }
     Row(
+        // The whole 48dp row opens the app (the title alone was a 16dp target); the circle keeps its own action.
         GlanceModifier.fillMaxWidth().height(48.dp).background(ImageProvider(R.drawable.widget_row))
-            .cornerRadius(18.dp).padding(end = 12.dp),
+            .cornerRadius(18.dp).padding(end = 12.dp).clickable(actionStartActivity<MainActivity>()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Completing is its own 48dp target, separate from opening the app, to avoid accidental completion.
@@ -187,7 +207,7 @@ private fun TaskRow(context: Context, task: TaskItem, now: Long, zone: ZoneId) {
             Image(ImageProvider(R.drawable.widget_ic_circle), contentDescription = null, modifier = GlanceModifier.size(20.dp))
         }
         Text(task.title, maxLines = 1,
-            modifier = GlanceModifier.defaultWeight().clickable(actionStartActivity<MainActivity>()),
+            modifier = GlanceModifier.defaultWeight(),
             style = TextStyle(color = onSurface, fontSize = 14.sp))
         if (due != null) {
             Spacer(GlanceModifier.width(8.dp))

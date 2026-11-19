@@ -263,6 +263,7 @@ fun TaskEditorDialog(
                         FilterChip(selected = category == name, onClick = { category = name }, label = { Text(name) })
                     }
                     FilterChip(selected = false, onClick = { newCategory = "" }, label = { Text("Nova") },
+                        modifier = Modifier.semantics { contentDescription = "Nova categoria" },
                         leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null, Modifier.size(16.dp)) })
                 }
                 newCategory?.let { draftName ->

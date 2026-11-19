@@ -11,7 +11,7 @@
 - **Widgets:** informativos, clicáveis; fundo legível, poucas linhas, controles grandes.
 - **Acessibilidade:** exigir rótulos em ações, verificar TalkBack, contraste, área de toque >= 48dp, fontes grandes e rolagem.
 - **Movimento:** tokens em `ui/theme/Theme.kt` (`PulsoMotion`); AnimatedContent entre abas, `animateItem` nas listas, FAB que encolhe ao rolar.
-- **Limite atual:** identidade "Brasa & Tinta" aplicada e verificada no emulador (claro/escuro), mas sem teste no Moto G84, TalkBack ou fonte grande. Nome do app ainda provisório.
+- **Limite atual:** identidade "Brasa & Tinta" aplicada e verificada no emulador (claro/escuro), e no Moto G84 (fonte 200% sem cortes; árvore TalkBack auditada, falta navegação por gestos). Nome do app ainda provisório.
 
 ## Paleta "Brasa & Tinta"
 

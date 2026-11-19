@@ -85,7 +85,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val open = PendingIntent.getActivity(context, id.hashCode(),
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val due = task.dueAt?.let { TaskRules.dueLabel(it, System.currentTimeMillis(), ZoneId.systemDefault()).text }
+        val due = task.dueAt?.let { TaskRules.reminderDueText(it, System.currentTimeMillis(), ZoneId.systemDefault()) }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_pulso)
             .setContentTitle(task.title)

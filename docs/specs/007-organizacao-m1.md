@@ -1,6 +1,6 @@
 # SPEC 007 — Organização do dia a dia (M1)
 
-**Status:** Implementado; testes unitários e instrumentados (emulador) passando; sem validação no Moto G84.
+**Status:** Implementado; testes unitários e instrumentados passando (emulador e Moto G84); notificações validadas no Moto G84; widget e TalkBack pendentes.
 
 ## Escopo
 
@@ -13,7 +13,7 @@
 7. **Busca global:** ícone na barra superior. Tarefas (título, observações, categoria, links; inclui concluídas) e Inbox pendente/arquivada (arquivadas podem voltar para a entrada). Todos os termos precisam aparecer; ignora acentos/maiúsculas.
 8. **Revisão semanal:** cartão em Hoje quando a última revisão tem 7+ dias. Seções: Entrada, Atrasadas (Amanhã / +7 dias / Sem prazo, contados a partir de hoje, mantendo a hora), Muito reagendadas (3+), Próximos 7 dias, Sem prazo, Concluídas na semana. "Concluir revisão" registra a data.
 9. **Histórico de reagendamento:** tabela append-only `task_reschedules`. Só conta mudança entre duas datas reais (definir/remover prazo não conta). Editor mostra "Reagendada N vezes" e as últimas mudanças.
-10. **Widget responsivo:** pequeno (contagem + capturar), médio (3 tarefas), grande (6). Círculo de 48dp conclui; título abre o app.
+10. **Widget responsivo:** estreito (contagem + capturar); a partir de 250 dp de largura, cabeçalho + lista rolável (`LazyColumn`, até 30 tarefas) que ocupa a altura disponível. Círculo de 48dp conclui; título abre o app.
 
 ## Dados
 
@@ -25,6 +25,6 @@ Room v2 com `Migration1To2` explícita (aditiva): colunas `task_items.links` (de
 - [x] Repositório: histórico só entre datas reais, adiamento/conclusão, renomear propaga, tombstone restaurável (`LocalTaskRepositoryTest`).
 - [x] Migração 1→2 preserva linhas e valida o schema exportado (`MigrationTest`); migração real de banco v1 no emulador.
 - [x] Backup v2 ida e volta, idempotente, aceita v1, rejeita inválidos sem escrever, 1000 tarefas (`BackupServiceTest`).
-- [ ] Notificação com ações testada no aparelho (Android 13+, permissão concedida e negada).
-- [ ] Widget nos três tamanhos em launcher real.
-- [ ] TalkBack e fonte grande nas telas novas.
+- [x] Notificação com ações testada no Moto G84 (Android 15, permissão negada e depois concedida); texto "Vence agora · HH:mm" no horário do prazo.
+- [x] Widget em launcher real (Moto G84): estreito, grande e baixo (lista rolável, concluir, abrir app, captura, reinício do processo).
+- [~] TalkBack: árvore de acessibilidade auditada no Moto G84 e 7 problemas corrigidos e reauditados (ver `docs/TESTING.md`); fonte grande (200%) OK no Moto G84; falta navegação por gestos.

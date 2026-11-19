@@ -5,8 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +48,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -87,10 +87,6 @@ private fun QuickCapture(onSave: (String, (Throwable?) -> Unit) -> Unit, onClose
     var error by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) {
-        focus.requestFocus()
-        keyboard?.show()
-    }
     fun submit() {
         if (text.isBlank() || busy) return
         busy = true
@@ -105,15 +101,16 @@ private fun QuickCapture(onSave: (String, (Throwable?) -> Unit) -> Unit, onClose
     Box(
         Modifier.fillMaxSize()
             .background(Color.Black.copy(alpha = scrim))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                onClickLabel = "Fechar captura") { if (!busy) onClose() },
+            // Tap outside closes. pointerInput (not clickable) so TalkBack doesn't get a screen-sized button;
+            // TalkBack users close with "Cancelar" or back.
+            .pointerInput(busy) { detectTapGestures { if (!busy) onClose() } },
         contentAlignment = Alignment.BottomCenter,
     ) {
         AnimatedVisibility(shown, enter = slideInVertically(PulsoMotion.gentle()) { it } + fadeIn()) {
         Surface(
             Modifier.fillMaxWidth().imePadding()
-                // Swallow taps on the panel so they don't dismiss the capture.
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+                // Swallow taps on the panel so they don't dismiss the capture (no accessibility node).
+                .pointerInput(Unit) { detectTapGestures { } },
             shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
@@ -143,6 +140,11 @@ private fun QuickCapture(onSave: (String, (Throwable?) -> Unit) -> Unit, onClose
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences,
                         imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { submit() }))
+                // Runs once the field is attached (it lives inside AnimatedVisibility, absent on the first frame).
+                LaunchedEffect(Unit) {
+                    focus.requestFocus()
+                    keyboard?.show()
+                }
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                     TextButton(onClick = onClose, enabled = !busy) { Text("Cancelar") }

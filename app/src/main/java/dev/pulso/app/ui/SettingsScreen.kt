@@ -52,6 +52,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -113,7 +117,9 @@ fun SettingsScreen(state: PulsoUiState, vm: PulsoViewModel, notifications: Notif
                         } }) { Text(mode.label) }
                 }
             }
-            if (android.os.Build.VERSION.SDK_INT >= 31) Row(Modifier.fillMaxWidth(),
+            // The whole row toggles, so TalkBack reads the label together with the switch state.
+            if (android.os.Build.VERSION.SDK_INT >= 31) Row(Modifier.fillMaxWidth().toggleable(
+                value = state.settings.appearance.dynamicColor, role = Role.Switch, onValueChange = vm::dynamicColor),
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Cores do papel de parede")
@@ -121,7 +127,7 @@ fun SettingsScreen(state: PulsoUiState, vm: PulsoViewModel, notifications: Notif
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 androidx.compose.material3.Switch(checked = state.settings.appearance.dynamicColor,
-                    onCheckedChange = vm::dynamicColor)
+                    onCheckedChange = null)
             }
         }
 
@@ -135,10 +141,12 @@ fun SettingsScreen(state: PulsoUiState, vm: PulsoViewModel, notifications: Notif
                     Text("Sugerido ao escolher uma data e no \"Amanhã\" das notificações.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                OutlinedButton(onClick = {
+                val timeText = time.format(DateTimeFormatter.ofPattern("HH:mm"))
+                OutlinedButton(modifier = Modifier.semantics { contentDescription = "Horário padrão do prazo, $timeText. Alterar" },
+                    onClick = {
                     TimePickerDialog(context, { _, hour, minute -> vm.defaultDueTime(LocalTime.of(hour, minute)) },
                         time.hour, time.minute, DateFormat.is24HourFormat(context)).show()
-                }) { Text(time.format(DateTimeFormatter.ofPattern("HH:mm"))) }
+                }) { Text(timeText) }
             }
             Text("Lembretes usam o WorkManager do Android: chegam perto do horário, podendo atrasar alguns minutos " +
                 "(mais em economia de bateria). Não são despertadores.",

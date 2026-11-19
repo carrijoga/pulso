@@ -11,9 +11,9 @@ Legenda: `[x]` implementado no código e coberto por teste automatizado ou verif
 - [x] Backup export/import e workflow CI; AGENTS.md e specs.
 - [x] Build + lint + testes unitários executados localmente (Windows, JBR 21) em 2026-11-19.
 - [~] CI: workflow alinhado ao compileSdk 37 e com job de testes instrumentados, **ainda não executado** (repositório sem remoto/commits).
-- [ ] Teste em Moto G84 e correções de ergonomia.
-- [x] Testes instrumentados de Room, migração e backup (12 testes, emulador API 37). Widget ainda sem teste automatizado.
-- [~] Acessibilidade: rótulos de checkbox/ações, alvos de 48dp no widget; falta revisão com TalkBack e fonte grande.
+- [~] Teste em Moto G84: instrumentados, telas, permissão e lembretes com ações validados (2026-11-19); widget grande e captura pelo widget validados (com 2 correções); atalho do ícone OK; TalkBack auditado com 7 correções reconferidas (falta navegação por gestos); fonte grande (200%) OK.
+- [x] Testes instrumentados de Room, migração e backup (12 testes, emulador API 37 e Moto G84). Widget ainda sem teste automatizado.
+- [~] Acessibilidade: rótulos e alvos de 48dp auditados com TalkBack no Moto G84 (7 correções); fonte grande (200%) OK; falta navegação por gestos.
 - [x] Notificações reagendadas após importação (coberto por teste de backup).
 - [x] Ícone do app, splash, atalho "Capturar", prévia do widget e ícone de notificação ligados ao manifesto.
 - [x] Confirmação antes de excluir tarefa e "Desfazer" para exclusão/arquivamento.
@@ -25,7 +25,7 @@ Legenda: `[x]` implementado no código e coberto por teste automatizado ou verif
 - [x] Campo de links e categorias personalizáveis estruturadas (lista gerenciável; renomear propaga para tarefas).
 - [x] Horário do prazo configurável por tarefa e horário padrão nos Ajustes; adiar lembrete ("Adiar 1h"/"Amanhã" na notificação); estados de permissão claros.
 - [x] Revisão semanal guiada com histórico de reagendamento.
-- [x] Widget pequeno/médio/grande (SizeMode.Responsive). Falta teste em launcher real.
+- [x] Widget pequeno/médio/grande (SizeMode.Responsive). Validado no Moto G84 nos tamanhos estreito, baixo e grande (lista rolável).
 - [~] Melhorias de acessibilidade, UX e confiabilidade (ver lacunas em `docs/TESTING.md`).
 - [x] Redesenho visual "Brasa & Tinta" (telas, editor em bottom sheet, captura, widget, ícones), verificado no emulador; falta Moto G84/TalkBack.
 

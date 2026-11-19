@@ -1,6 +1,6 @@
 # SPEC 002 — Tarefas, prazos e lembretes
 
-**Status:** Base implementada, sem verificação em dispositivo.
+**Status:** Implementado; lembretes verificados no Moto G84 (Android 15).
 
 ## Comportamento atual
 
@@ -14,7 +14,7 @@ Tarefas com título (1 a 200 caracteres), notas, categoria livre, prioridade (`L
 - [x] Prazo considera timezone ao determinar vencimento diário.
 - [x] Agendamento segue alterações do repositório local.
 - [x] Lembretes restaurados via import de backup.
-- [ ] Notificação no aparelho com permissão 13+ testada.
+- [x] Notificação no aparelho com permissão 13+ testada (Moto G84, Android 15).
 - [x] Hora do prazo configurável por tarefa; adiamento de lembrete (ver SPEC 007).
 - [x] Revisão semanal (SPEC 007).
 - [ ] Recorrência (M1.5).

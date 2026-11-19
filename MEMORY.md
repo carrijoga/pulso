@@ -26,11 +26,11 @@
 - **Migração real:** APK v2 instalado sobre banco v1 do emulador sem perda.
 - **Após o redesenho (2026-11-19):** build/lint/15 unitários e 12 instrumentados passando de novo; tela Hoje conferida por screenshot.
 - **CI:** workflow atualizado (SDK 37, job de emulador), **NÃO EXECUTADO** (sem remoto/commits; repositório git está na pasta pai `dev/`).
-- **Moto G84: NÃO TESTADO.** Notificações com ações e widget em launcher real: não testados.
+- **Moto G84 (2026-11-19, Android 15): PARCIAL.** 12 instrumentados OK; telas, permissão (negada → concedida) e lembretes com ações Concluir/Adiar 1h/Amanhã validados (ver `docs/TESTING.md`). Widget (estreito, baixo, grande) e captura pelo widget validados. Widget usa lista rolável (`LazyColumn`): o launcher Motorola informa altura menor que a real, então não calcular linhas por altura. Atalho do ícone OK. TalkBack: árvore auditada e corrigida (rótulo no próprio FAB — o texto do ExtendedFAB não aparece para acessibilidade; nada de `clickable` decorativo em fundos/painéis). Fonte 200% OK em todas as telas e no widget. Não testado: navegação TalkBack por gestos. ATENÇÃO: o Pulso no G84 já tem dados reais do usuário — antes de instalar, comparar o identityHash do schema com `room_master_table` do aparelho e fazer backup via run-as; nunca tocar em tarefas reais nos testes. Glance: dados do widget vêm de `collectAsState` dentro do `provideContent` (ler só antes deixava o widget desatualizado após ações). Para inspecionar o banco no aparelho: `run-as dev.pulso.app cat databases/pulso.db*` (não há `sqlite3` no aparelho).
 
 ## Pendências com maior prioridade
 
-1. Testar no Moto G84: notificações (permissão concedida/negada, ações Concluir/Adiar), widget nos 3 tamanhos, captura pelo atalho e widget.
+1. Moto G84: só falta navegação TalkBack por gestos (ouvir os anúncios).
 2. Publicar o repositório e rodar o CI.
 3. TalkBack/fonte grande nas telas redesenhadas.
 4. Decidir nome final.
