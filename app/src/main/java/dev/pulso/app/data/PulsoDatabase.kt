@@ -45,6 +45,10 @@ interface TaskDao {
     @Query("SELECT * FROM task_items WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): TaskEntity?
 
+    /** Open (not completed, not deleted) occurrences of a series; SPEC 008 keeps at most one. */
+    @Query("SELECT * FROM task_items WHERE seriesId = :seriesId AND deletedAt IS NULL AND completedAt IS NULL")
+    suspend fun findOpenBySeries(seriesId: String): List<TaskEntity>
+
     @Query("SELECT * FROM task_items")
     suspend fun allForBackup(): List<TaskEntity>
 
@@ -179,6 +183,10 @@ interface HabitCheckinDao {
 interface ChecklistDao {
     @Query("SELECT * FROM checklist_items WHERE taskId = :taskId AND deletedAt IS NULL ORDER BY position")
     fun observeForTask(taskId: String): Flow<List<ChecklistItemEntity>>
+
+    /** Active items of a task, used to copy the checklist into the next occurrence (SPEC 008). */
+    @Query("SELECT * FROM checklist_items WHERE taskId = :taskId AND deletedAt IS NULL ORDER BY position")
+    suspend fun activeForTask(taskId: String): List<ChecklistItemEntity>
 
     @Query("SELECT * FROM checklist_items WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): ChecklistItemEntity?

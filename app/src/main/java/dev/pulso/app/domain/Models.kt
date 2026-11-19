@@ -32,6 +32,8 @@ data class TaskItem(
     val seriesId: String? = null,
     /** v3: rule of [seriesId], filled by the repository (SPEC 008). */
     val recurrence: RecurrenceRule? = null,
+    /** v3: first occurrence of [seriesId]; the monthly/yearly label uses its day (not the reschedules). */
+    val recurrenceAnchorDueAt: Long? = null,
 ) {
     val isCompleted: Boolean get() = completedAt != null
 }

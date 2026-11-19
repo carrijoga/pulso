@@ -48,6 +48,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Snooze
 import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material3.AlertDialog
@@ -85,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import dev.pulso.app.domain.Category
 import dev.pulso.app.domain.DueState
 import dev.pulso.app.domain.Priority
+import dev.pulso.app.domain.RecurrenceRules
 import dev.pulso.app.domain.RescheduleEntry
 import dev.pulso.app.domain.TaskDraft
 import dev.pulso.app.domain.TaskItem
@@ -134,6 +136,10 @@ fun TaskCard(task: TaskItem, onToggle: (Boolean) -> Unit, onOpen: () -> Unit, mo
                     if (task.snoozedUntil != null && !task.isCompleted) MetaIcon(Icons.Rounded.Snooze, "Lembrete adiado", null)
                     if (task.rescheduleCount > 0) MetaIcon(Icons.Rounded.Update,
                         "Reagendada ${task.rescheduleCount} vezes", "${task.rescheduleCount}")
+                    task.recurrence?.let { rule ->
+                        val anchor = task.recurrenceAnchorDueAt ?: task.dueAt ?: now
+                        MetaIcon(Icons.Rounded.Repeat, "Repete: ${RecurrenceRules.describe(rule, anchor, zone)}", null)
+                    }
                     val links = TaskRules.linkList(task.links).size
                     if (links > 0) MetaIcon(Icons.Rounded.Link, "$links links", "$links")
                     if (task.notes.isNotBlank()) MetaIcon(Icons.AutoMirrored.Rounded.Notes, "Tem observações", null)
@@ -201,6 +207,7 @@ fun TaskEditorDialog(
     existing: TaskItem? = null,
     history: Flow<List<RescheduleEntry>> = flowOf(emptyList()),
     onDelete: (() -> Unit)? = null,
+    onEndSeries: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -210,6 +217,8 @@ fun TaskEditorDialog(
     var category by rememberSaveable { mutableStateOf(initial.category) }
     var priority by rememberSaveable { mutableStateOf(initial.priority) }
     var dueAt by rememberSaveable { mutableStateOf(initial.dueAt) }
+    var recurrence by rememberSaveable(stateSaver = RecurrenceSaver) { mutableStateOf(initial.recurrence) }
+    var repeatOpen by rememberSaveable { mutableStateOf(false) }
     var newCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -225,7 +234,7 @@ fun TaskEditorDialog(
     fun save() {
         if (busy || text.isBlank()) return
         busy = true
-        onSave(TaskDraft(text, notes, category, priority, dueAt, links)) { failure ->
+        onSave(TaskDraft(text, notes, category, priority, dueAt, links, recurrence)) { failure ->
             busy = false
             error = failure?.message
         }
@@ -313,7 +322,8 @@ fun TaskEditorDialog(
                     }
                 }
                 if (dueAt != null) {
-                    TextButton(onClick = { dueAt = null }) { Text("Remover prazo") }
+                    // A repeating task needs a due date (its first occurrence), so it cannot be removed.
+                    if (recurrence == null) TextButton(onClick = { dueAt = null }) { Text("Remover prazo") }
                     if (notificationAccess != NotificationAccess.ALLOWED) {
                         Text("Notificações desativadas: o lembrete não vai aparecer.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -326,6 +336,27 @@ fun TaskEditorDialog(
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                Text("Repetição", style = MaterialTheme.typography.labelLarge)
+                val rule = recurrence
+                val repeatAnchor = rule?.let { savedAnchor(it, existing, dueAt, System.currentTimeMillis()) }
+                    ?: dueAt ?: System.currentTimeMillis()
+                val repeatLabel = rule?.let { RecurrenceRules.describe(it, repeatAnchor, zone) } ?: "Não repete"
+                OutlinedButton(onClick = { repeatOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Repetir: $repeatLabel", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (rule != null) {
+                    Text(nextPreview(rule, repeatAnchor, zone), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (repeatOpen) RecurrenceDialog(current = recurrence, existing = existing, dueAt = dueAt, zone = zone,
+                    onDismiss = { repeatOpen = false },
+                    onConfirm = { picked ->
+                        recurrence = picked
+                        if (picked != null && dueAt == null) dueAt = TaskRules.dueAtFor(today, defaultDueTime, zone)
+                        repeatOpen = false
+                    })
                 existing?.snoozedUntil?.takeIf { !existing.isCompleted && dueAt == existing.dueAt }?.let {
                     Text("Lembrete adiado para ${formatDateTime(it)}.", style = MaterialTheme.typography.bodySmall)
                 }
@@ -340,13 +371,25 @@ fun TaskEditorDialog(
             }
     }
     if (confirmDelete && onDelete != null) {
+        val repeating = existing?.recurrence != null && onEndSeries != null
         AlertDialog(onDismissRequest = { confirmDelete = false },
             title = { Text("Excluir tarefa?") },
-            text = { Text("\"${text.trim()}\" sai das listas. Você pode desfazer logo em seguida.") },
-            confirmButton = {
-                Button(onClick = { confirmDelete = false; onDelete() }) { Text("Excluir") }
+            text = {
+                Text(if (repeating) "\"${text.trim()}\" se repete. \"Excluir só esta\" remove esta ocorrência e mantém a próxima. " +
+                    "\"Encerrar repetição\" remove esta ocorrência e não cria mais nenhuma."
+                else "\"${text.trim()}\" sai das listas. Você pode desfazer logo em seguida.")
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancelar") } })
+            confirmButton = {
+                Button(onClick = { confirmDelete = false; onDelete() }) { Text(if (repeating) "Excluir só esta" else "Excluir") }
+            },
+            dismissButton = {
+                Row {
+                    if (repeating) TextButton(onClick = { confirmDelete = false; onEndSeries?.invoke() }) {
+                        Text("Encerrar repetição")
+                    }
+                    TextButton(onClick = { confirmDelete = false }) { Text("Cancelar") }
+                }
+            })
     }
 }
 
