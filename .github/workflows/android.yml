@@ -17,8 +17,10 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
-      - name: Install Android SDK Platform (matches compileSdk = 37)
-        run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
+        with:
+          # The action's default ('tools platform-tools') fails: 'tools' no longer exists in cmdline-tools 16+.
+          # Platform/build-tools match compileSdk = 37.
+          packages: platform-tools platforms;android-37.0 build-tools;37.0.0
       - name: Check docs and structure
         run: python3 scripts/check_repo.py
       - name: Gradle test, lint and debug APK
