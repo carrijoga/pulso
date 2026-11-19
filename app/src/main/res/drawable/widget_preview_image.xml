@@ -1,0 +1,55 @@
+<!-- Picker preview fallback for launchers below Android 12 (previewLayout is 31+). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp"
+    android:height="180dp"
+    android:viewportWidth="250"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="@color/widget_background"
+        android:pathData="M28,0H222A28,28 0 0,1 250,28V152A28,28 0 0,1 222,180H28A28,28 0 0,1 0,152V28A28,28 0 0,1 28,0Z" />
+    <path
+        android:fillColor="@color/pulso_brasa"
+        android:pathData="M22,14H34A8,8 0 0,1 42,22V34A8,8 0 0,1 34,42H22A8,8 0 0,1 14,34V22A8,8 0 0,1 22,14Z" />
+    <path
+        android:pathData="M18.5,28.5H22L24,25L26.5,32L28.5,29L30,31L36,24.5"
+        android:strokeWidth="2.4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="@color/widget_on_surface"
+        android:pathData="M50,18h40v8h-40z" />
+    <path
+        android:fillColor="@color/widget_on_surface_variant"
+        android:pathData="M50,31h58v6h-58z" />
+    <path
+        android:fillColor="@color/widget_accent"
+        android:pathData="M216,28m-14,0a14,14 0 1,1 28,0a14,14 0 1,1 -28,0" />
+    <path
+        android:pathData="M216,21V35M209,28H223"
+        android:strokeWidth="2.6"
+        android:strokeColor="@color/widget_on_accent"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="@color/widget_surface"
+        android:pathData="M28,54H222A14,14 0 0,1 222,82H28A14,14 0 0,1 28,54Z" />
+    <path
+        android:fillColor="@color/widget_surface"
+        android:pathData="M28,90H222A14,14 0 0,1 222,118H28A14,14 0 0,1 28,90Z" />
+    <path
+        android:fillColor="@color/widget_surface"
+        android:pathData="M28,126H222A14,14 0 0,1 222,154H28A14,14 0 0,1 28,126Z" />
+    <path
+        android:pathData="M32,68m-7,0a7,7 0 1,1 14,0a7,7 0 1,1 -14,0M32,104m-7,0a7,7 0 1,1 14,0a7,7 0 1,1 -14,0M32,140m-7,0a7,7 0 1,1 14,0a7,7 0 1,1 -14,0"
+        android:strokeWidth="2"
+        android:strokeColor="@color/widget_outline" />
+    <path
+        android:fillColor="@color/widget_on_surface"
+        android:pathData="M48,65h96v6h-96zM48,101h70v6h-70zM48,137h110v6h-110z" />
+    <path
+        android:fillColor="@color/widget_overdue"
+        android:pathData="M196,65h26v6h-26z" />
+    <path
+        android:fillColor="@color/widget_today"
+        android:pathData="M202,101h20v6h-20z" />
+</vector>

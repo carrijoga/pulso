@@ -1,0 +1,209 @@
+package dev.pulso.app.widget
+
+import android.content.Context
+import android.content.Intent
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.provideContent
+import androidx.glance.background
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
+import androidx.glance.layout.padding
+import androidx.glance.layout.size
+import androidx.glance.layout.width
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
+import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
+import androidx.compose.ui.graphics.Color
+import androidx.glance.color.ColorProvider
+import dev.pulso.app.CaptureActivity
+import dev.pulso.app.MainActivity
+import dev.pulso.app.PulsoApplication
+import dev.pulso.app.R
+import dev.pulso.app.domain.DueState
+import dev.pulso.app.domain.TaskItem
+import dev.pulso.app.domain.TaskRules
+import kotlinx.coroutines.flow.first
+import java.time.ZoneId
+
+private val TASK_ID = ActionParameters.Key<String>("task_id")
+
+private val SMALL = DpSize(110.dp, 110.dp)
+private val MEDIUM = DpSize(250.dp, 110.dp)
+private val LARGE = DpSize(250.dp, 260.dp)
+
+// Mirrors res/values*/colors.xml widget_* (resource-based ColorProvider is restricted API in Glance).
+private val onSurface = ColorProvider(day = Color(0xFF231917), night = Color(0xFFF1DFDB))
+private val onSurfaceVariant = ColorProvider(day = Color(0xFF6E5752), night = Color(0xFFD8C2BD))
+private val overdueColor = ColorProvider(day = Color(0xFFBA1A1A), night = Color(0xFFFFB4AB))
+private val todayColor = ColorProvider(day = Color(0xFF8A5100), night = Color(0xFFFFB960))
+
+class TodayWidget : GlanceAppWidget() {
+    /** Small: count + capture. Medium: 3 tasks. Large: up to 6 tasks. */
+    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, LARGE))
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val tasks = (context.applicationContext as PulsoApplication).container.repository
+            .observeTasks().first()
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        // Overdue/today first, then the rest: same ordering as the app's Hoje screen.
+        val active = TaskRules.agenda(tasks, now, zone)
+        provideContent { WidgetContent(context, active, now, zone) }
+    }
+}
+
+@Composable
+private fun WidgetContent(context: Context, active: List<TaskItem>, now: Long, zone: ZoneId) {
+    val size = LocalSize.current
+    val maxRows = when {
+        size.width < MEDIUM.width -> 0
+        size.height >= LARGE.height -> 6
+        else -> 3
+    }
+    val dueCount = active.count { TaskRules.isDueTodayOrOverdue(it, now, zone) }
+    Column(
+        GlanceModifier.fillMaxSize().appWidgetBackground().background(ImageProvider(R.drawable.widget_background))
+            .cornerRadius(28.dp).padding(14.dp)
+    ) {
+        Header(context, active.size, dueCount, compact = maxRows == 0)
+        if (maxRows > 0) {
+            Spacer(GlanceModifier.height(8.dp))
+            if (active.isEmpty()) {
+                Row(GlanceModifier.fillMaxWidth().background(ImageProvider(R.drawable.widget_row)).cornerRadius(18.dp)
+                    .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Image(ImageProvider(R.drawable.widget_ic_done_all), contentDescription = null,
+                        modifier = GlanceModifier.size(32.dp))
+                    Column(GlanceModifier.padding(start = 10.dp)) {
+                        Text("Tudo em dia", style = TextStyle(color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold))
+                        Text("Toque em + para capturar.", style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp))
+                    }
+                }
+            } else {
+                active.take(maxRows).forEach { task ->
+                    TaskRow(context, task, now, zone)
+                    Spacer(GlanceModifier.height(6.dp))
+                }
+                if (active.size > maxRows) {
+                    Text("+${active.size - maxRows} no app",
+                        style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp),
+                        modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>()))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Header(context: Context, pending: Int, due: Int, compact: Boolean) {
+    val summary = when {
+        pending == 0 -> "Nada pendente"
+        due > 0 -> "$due para hoje · $pending pendentes"
+        else -> "$pending pendentes"
+    }
+    val open = actionStartActivity<MainActivity>()
+    if (compact) {
+        Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("$pending", modifier = GlanceModifier.clickable(open),
+                style = TextStyle(color = onSurface, fontSize = 28.sp, fontWeight = FontWeight.Bold))
+            Text(if (due > 0) "$due hoje" else "pendentes",
+                style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp))
+            Spacer(GlanceModifier.height(6.dp))
+            AddButton(context)
+        }
+        return
+    }
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Image(ImageProvider(R.drawable.ic_pulso_mark), contentDescription = null,
+            modifier = GlanceModifier.size(28.dp))
+        Column(GlanceModifier.defaultWeight().padding(start = 10.dp).clickable(open)) {
+            Text("Hoje", style = TextStyle(color = onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold))
+            Text(summary, style = TextStyle(color = onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
+        }
+        AddButton(context)
+    }
+}
+
+@Composable
+private fun AddButton(context: Context) {
+    Box(
+        GlanceModifier.size(48.dp).background(ImageProvider(R.drawable.widget_add_button)).cornerRadius(24.dp)
+            .clickable(actionStartActivity(Intent(context, CaptureActivity::class.java)))
+            .semantics { contentDescription = "Capturar anotação" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(ImageProvider(R.drawable.widget_ic_add), contentDescription = null, modifier = GlanceModifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun TaskRow(context: Context, task: TaskItem, now: Long, zone: ZoneId) {
+    val due = task.dueAt?.let { TaskRules.dueLabel(it, now, zone) }
+    val dueColor = when (due?.state) {
+        DueState.OVERDUE -> overdueColor
+        DueState.TODAY -> todayColor
+        else -> onSurfaceVariant
+    }
+    Row(
+        GlanceModifier.fillMaxWidth().height(48.dp).background(ImageProvider(R.drawable.widget_row))
+            .cornerRadius(18.dp).padding(end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Completing is its own 48dp target, separate from opening the app, to avoid accidental completion.
+        Box(
+            GlanceModifier.size(48.dp)
+                .clickable(actionRunCallback<CompleteTaskAction>(actionParametersOf(TASK_ID to task.id)))
+                .semantics { contentDescription = "Concluir ${task.title}" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(ImageProvider(R.drawable.widget_ic_circle), contentDescription = null, modifier = GlanceModifier.size(20.dp))
+        }
+        Text(task.title, maxLines = 1,
+            modifier = GlanceModifier.defaultWeight().clickable(actionStartActivity<MainActivity>()),
+            style = TextStyle(color = onSurface, fontSize = 14.sp))
+        if (due != null) {
+            Spacer(GlanceModifier.width(8.dp))
+            Text(due.text, maxLines = 1, style = TextStyle(color = dueColor, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+        }
+    }
+}
+
+class CompleteTaskAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val taskId = parameters[TASK_ID] ?: return
+        // The repository's change listener refreshes every widget instance afterwards.
+        (context.applicationContext as PulsoApplication).container.repository.setCompleted(taskId, true)
+    }
+}
+
+class TodayWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = TodayWidget()
+}
