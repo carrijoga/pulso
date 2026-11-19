@@ -17,6 +17,10 @@ class HabitRulesTest {
     // 2026-11-19 is a Thursday; its week starts Monday 2026-11-16.
     private val today = LocalDate.of(2026, 11, 19)
     private val monday = LocalDate.of(2026, 11, 16)
+    private val friday = LocalDate.of(2026, 11, 20)
+    private val saturday = LocalDate.of(2026, 11, 21)
+    private val sunday = LocalDate.of(2026, 11, 22)
+    private val nextMonday = LocalDate.of(2026, 11, 23)
     private val longAgo = LocalDate.of(2026, 1, 1)
 
     private fun d(s: String) = LocalDate.parse(s)
@@ -37,6 +41,9 @@ class HabitRulesTest {
 
     private fun streak(h: Habit, checkins: List<HabitCheckin>, now: LocalDate = today, created: LocalDate = longAgo) =
         HabitRules.currentStreak(h, checkins, now, created)
+
+    private fun progress(h: Habit, checkins: List<HabitCheckin>, week: LocalDate, created: LocalDate = longAgo) =
+        HabitRules.weekProgress(h, checkins, week, created)
 
     private val mwf = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)
 
@@ -79,37 +86,96 @@ class HabitRulesTest {
     // --- weekProgress ---
 
     @Test fun `weekProgress daily targets 7`() {
-        val p = HabitRules.weekProgress(habit(), ck(monday, monday.plusDays(1), monday.minusDays(1), monday.plusDays(7)), monday)
+        val p = progress(habit(), ck(monday, monday.plusDays(1), monday.minusDays(1), monday.plusDays(7)), monday)
         assertEquals(WeekProgress(2, 7), p)
     }
 
     @Test fun `weekProgress days of week counts only marked days`() {
         val h = habit(HabitScheduleType.DAYS_OF_WEEK, days = mwf)
         // Mon, Tue (extra, not scheduled), Wed
-        val p = HabitRules.weekProgress(h, ck(monday, monday.plusDays(1), monday.plusDays(2)), monday)
+        val p = progress(h, ck(monday, monday.plusDays(1), monday.plusDays(2)), monday)
         assertEquals(WeekProgress(2, 3), p)
     }
 
     @Test fun `weekProgress times per week met and not met`() {
         val h = habit(HabitScheduleType.TIMES_PER_WEEK, times = 3)
-        assertEquals(WeekProgress(2, 3), HabitRules.weekProgress(h, ck(monday, monday.plusDays(1)), monday))
-        assertEquals(WeekProgress(3, 3), HabitRules.weekProgress(h, ck(monday, monday.plusDays(1), monday.plusDays(3)), monday))
+        assertEquals(WeekProgress(2, 3), progress(h, ck(monday, monday.plusDays(1)), monday))
+        assertEquals(WeekProgress(3, 3), progress(h, ck(monday, monday.plusDays(1), monday.plusDays(3)), monday))
     }
 
     @Test fun `weekProgress ignores other habits and duplicate dates`() {
         val h = habit()
         val all = ck(monday, monday) + ck(monday.plusDays(1), habitId = "other")
-        assertEquals(WeekProgress(1, 7), HabitRules.weekProgress(h, all, monday))
+        assertEquals(WeekProgress(1, 7), progress(h, all, monday))
     }
 
     @Test fun `week turns over on monday`() {
         val h = habit(HabitScheduleType.TIMES_PER_WEEK, times = 2)
-        val sunday = monday.minusDays(1)
-        assertEquals(WeekProgress(0, 2), HabitRules.weekProgress(h, ck(sunday), monday))
-        assertEquals(WeekProgress(1, 2), HabitRules.weekProgress(h, ck(sunday), HabitRules.weekStart(sunday)))
+        val previousSunday = monday.minusDays(1)
+        assertEquals(WeekProgress(0, 2), progress(h, ck(previousSunday), monday))
+        assertEquals(WeekProgress(1, 2), progress(h, ck(previousSunday), HabitRules.weekStart(previousSunday)))
         assertEquals(monday, HabitRules.weekStart(monday))
         assertEquals(monday, HabitRules.weekStart(monday.plusDays(6)))
         assertEquals(monday.plusWeeks(1), HabitRules.weekStart(monday.plusDays(7)))
+    }
+
+    // --- proportional goal in the creation week ---
+
+    @Test fun `times per week created friday keeps the 3x goal (fri, sat, sun)`() {
+        val h = habit(HabitScheduleType.TIMES_PER_WEEK, times = 3, created = friday)
+        assertEquals(WeekProgress(0, 3), progress(h, emptyList(), monday, created = friday))
+        assertEquals(WeekProgress(3, 3), progress(h, ck(friday, saturday, sunday), monday, created = friday))
+    }
+
+    @Test fun `times per week created saturday targets the 2 remaining days`() {
+        val h = habit(HabitScheduleType.TIMES_PER_WEEK, times = 3, created = saturday)
+        assertEquals(WeekProgress(1, 2), progress(h, ck(saturday), monday, created = saturday))
+        assertEquals(WeekProgress(2, 2), progress(h, ck(saturday, sunday), monday, created = saturday))
+    }
+
+    @Test fun `times per week created saturday with sat and sun done counts one week of streak`() {
+        val h = habit(HabitScheduleType.TIMES_PER_WEEK, times = 3, created = saturday)
+        // Check-in before creation (friday) is ignored; sat + sun meet the prorated goal of 2.
+        assertEquals(1, streak(h, ck(friday, saturday, sunday), now = sunday, created = saturday))
+        assertEquals(0, streak(h, ck(friday, saturday), now = sunday, created = saturday))
+    }
+
+    @Test fun `daily created thursday targets the 4 remaining days`() {
+        val h = habit(created = today)
+        assertEquals(WeekProgress(2, 4), progress(h, ck(today, friday), monday, created = today))
+    }
+
+    @Test fun `days of week seg qua sex created thursday targets only friday`() {
+        val h = habit(HabitScheduleType.DAYS_OF_WEEK, days = mwf, created = today)
+        assertEquals(WeekProgress(1, 1), progress(h, ck(friday), monday, created = today))
+        // Monday and Wednesday are before creation: they neither count nor raise the goal.
+        assertEquals(WeekProgress(1, 1), progress(h, ck(monday, friday), monday, created = today))
+    }
+
+    @Test fun `days of week created saturday with no marked day left ignores the week`() {
+        val h = habit(HabitScheduleType.DAYS_OF_WEEK, days = mwf, created = saturday)
+        assertEquals(WeekProgress(0, 0), progress(h, emptyList(), monday, created = saturday))
+        // Friday check-in is before creation: no progress and no streak.
+        assertEquals(WeekProgress(0, 0), progress(h, ck(friday), monday, created = saturday))
+        assertEquals(0, streak(h, ck(friday), now = sunday, created = saturday))
+    }
+
+    @Test fun `next week after creation keeps the full goal`() {
+        val daily = habit(created = today)
+        assertEquals(WeekProgress(0, 7), progress(daily, emptyList(), nextMonday, created = today))
+        val threeX = habit(HabitScheduleType.TIMES_PER_WEEK, times = 3, created = saturday)
+        assertEquals(WeekProgress(0, 3), progress(threeX, emptyList(), nextMonday, created = saturday))
+        val mwfHabit = habit(HabitScheduleType.DAYS_OF_WEEK, days = mwf, created = saturday)
+        assertEquals(WeekProgress(0, 3), progress(mwfHabit, emptyList(), nextMonday, created = saturday))
+    }
+
+    @Test fun `habit created on sunday targets only sunday`() {
+        assertEquals(WeekProgress(1, 1), progress(habit(created = sunday), ck(sunday), monday, created = sunday))
+        val threeX = habit(HabitScheduleType.TIMES_PER_WEEK, times = 3, created = sunday)
+        assertEquals(WeekProgress(0, 1), progress(threeX, emptyList(), monday, created = sunday))
+        val mwfHabit = habit(HabitScheduleType.DAYS_OF_WEEK, days = mwf, created = sunday)
+        assertEquals(WeekProgress(0, 0), progress(mwfHabit, emptyList(), monday, created = sunday))
+        assertEquals(1, streak(habit(created = sunday), ck(sunday), now = sunday, created = sunday))
     }
 
     // --- daily / days-of-week streak ---
@@ -225,6 +291,19 @@ class HabitRulesTest {
         assertEquals(true, HabitRules.dueToday(listOf(h), metToday, today, sp).single().doneToday)
         val notMet = ck(monday)
         assertEquals(1, HabitRules.dueToday(listOf(h), notMet, today, sp).size)
+    }
+
+    @Test fun `dueToday uses the prorated goal of the creation week for times per week`() {
+        // Created Saturday, goal 2 (sat + sun): one check-in leaves it visible on Sunday.
+        val h = habit(HabitScheduleType.TIMES_PER_WEEK, times = 3, created = saturday)
+        val r = HabitRules.dueToday(listOf(h), ck(saturday), sunday, sp).single()
+        assertEquals(WeekProgress(1, 2), r.progress)
+        // Goal met on Sunday and done today: still shown, marked as done.
+        val met = HabitRules.dueToday(listOf(h), ck(saturday, sunday), sunday, sp).single()
+        assertEquals(WeekProgress(2, 2), met.progress)
+        assertTrue(met.doneToday)
+        // Friday is before creation: it does not count toward the goal.
+        assertEquals(WeekProgress(1, 2), HabitRules.dueToday(listOf(h), ck(saturday, friday), sunday, sp).single().progress)
     }
 
     @Test fun `dueToday uses the creation date in the given zone`() {

@@ -25,7 +25,7 @@ object HabitRules {
     fun isScheduledOn(habit: Habit, date: LocalDate): Boolean
     /** Hábitos para a seção de Hoje, na ordem de `position`. */
     fun dueToday(habits: List<Habit>, checkins: List<HabitCheckin>, today: LocalDate): List<HabitToday>
-    fun weekProgress(habit: Habit, checkins: List<HabitCheckin>, weekStart: LocalDate): WeekProgress
+    fun weekProgress(habit: Habit, checkins: List<HabitCheckin>, weekStart: LocalDate, createdOn: LocalDate): WeekProgress
     fun currentStreak(habit: Habit, checkins: List<HabitCheckin>, today: LocalDate, createdOn: LocalDate): Int
     fun canCheck(date: LocalDate, today: LocalDate): Boolean
     fun describe(habit: Habit): String // "Todo dia", "Seg, qua e sex", "3x por semana"
@@ -36,7 +36,12 @@ data class WeekProgress(val done: Int, val target: Int)
 
 - `canCheck`: só hoje e até **7 dias para trás**; nunca datas futuras.
 - `isScheduledOn`: `DAILY` sempre; `DAYS_OF_WEEK` se o dia está marcado; `TIMES_PER_WEEK` sempre (qualquer dia vale).
-- `weekProgress.target`: `DAILY` = 7; `DAYS_OF_WEEK` = nº de dias marcados; `TIMES_PER_WEEK` = N. `done` conta check-ins na semana (em `DAYS_OF_WEEK`, só nos dias marcados).
+- `weekProgress.target`: `DAILY` = 7; `DAYS_OF_WEEK` = nº de dias marcados; `TIMES_PER_WEEK` = N. `done` conta check-ins na semana (em `DAYS_OF_WEEK`, só nos dias marcados). Check-ins anteriores a `createdOn` não contam.
+- **Semana de criação (proporcional):** a meta acima vale para as semanas que não contêm `createdOn`. Na semana que contém `createdOn`, a meta conta só de `createdOn` até domingo (`targetFor`, função privada usada por progresso, sequência e visibilidade de `TIMES_PER_WEEK` em `dueToday`):
+  - `DAILY`: dias de `createdOn` até domingo (criado na quinta → 4).
+  - `DAYS_OF_WEEK`: dias marcados em `createdOn` ou depois, na semana (criado na quinta com seg/qua/sex → 1). Se der 0, a semana fica fora da meta e da sequência.
+  - `TIMES_PER_WEEK`: `min(N, dias de createdOn até domingo)` (criado na sexta com 3x → 3; criado no sábado → 2).
+  - Nas outras semanas, nada muda. Ex.: hábito criado no sábado com 3x precisa de check-ins no sábado e no domingo para contar a semana.
 - **Sequência:**
   - `DAILY` / `DAYS_OF_WEEK`: nº de dias agendados consecutivos com check-in, contando para trás a partir de hoje. Se hoje é agendado e ainda não foi feito, começa a contar de ontem (o dia não terminou). Dias não agendados são pulados. Não conta antes de `createdOn`.
   - `TIMES_PER_WEEK`: nº de semanas consecutivas que atingiram a meta; a semana atual entra se já atingiu, e não quebra a sequência enquanto não terminou.
@@ -80,7 +85,7 @@ Se implementado: canal próprio "Lembretes de hábitos"; `reminderMinutes` por h
 
 ## Aceites
 
-- [x] `HabitRulesTest` (28 testes, passando em 2026-11-19): as três agendas; sequência com dia de hoje pendente; dias não agendados; extra fora da agenda; semana com meta atingida/não; `createdOn`; limite de 7 dias; virada de semana; troca de fuso não muda datas já gravadas.
+- [x] `HabitRulesTest` (37 testes, passando em 2026-11-19): as três agendas; sequência com dia de hoje pendente; dias não agendados; extra fora da agenda; semana com meta atingida/não; `createdOn`; meta proporcional na semana de criação (3x sexta/sábado, diária quinta, seg/qua/sex quinta, sábado sem dias restantes, semana seguinte com meta cheia, criado no domingo); limite de 7 dias; virada de semana; troca de fuso não muda datas já gravadas.
 - [ ] Repositório (instrumentado): marcar/desmarcar/remarcar reaproveita a linha; marcar duas vezes não duplica; data futura rejeitada; excluir/restaurar hábito preserva check-ins.
 - [ ] Backup v3 com hábitos e check-ins (SPEC 012).
 - [ ] Manual: TalkBack anuncia estado; fonte grande sem corte na seção de Hoje.
