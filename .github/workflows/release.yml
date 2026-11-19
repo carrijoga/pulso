@@ -1,0 +1,71 @@
+name: Release
+# Publishes a signed APK to GitHub Releases when a version tag (vMAJOR.MINOR.PATCH) is pushed.
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the release and upload the APK
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-37.0 build-tools;37.0.0
+
+      - name: Derive version from tag
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Tag '$TAG' must look like v1.2.3"; exit 1
+          fi
+          major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+          if (( minor > 99 || patch > 99 )); then echo "::error::minor/patch must be <= 99"; exit 1; fi
+          echo "VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$(( major * 10000 + minor * 100 + patch ))" >> "$GITHUB_ENV"
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PULSO_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret PULSO_KEYSTORE_BASE64 is missing (see docs/DEVELOPMENT.md, Release)"; exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/pulso-release.jks"
+          echo "PULSO_KEYSTORE_FILE=$RUNNER_TEMP/pulso-release.jks" >> "$GITHUB_ENV"
+
+      - name: Test, lint and build signed release APK
+        env:
+          PULSO_KEYSTORE_PASSWORD: ${{ secrets.PULSO_KEYSTORE_PASSWORD }}
+          PULSO_KEY_ALIAS: ${{ secrets.PULSO_KEY_ALIAS }}
+          PULSO_KEY_PASSWORD: ${{ secrets.PULSO_KEY_PASSWORD }}
+        run: |
+          python3 scripts/check_repo.py
+          ./gradlew --no-daemon -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME" \
+            :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+
+      - name: Verify signature and prepare assets
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          test -f "$apk" || { echo "::error::Signed APK not found (signing env missing?)"; ls app/build/outputs/apk/release || true; exit 1; }
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/pulso-$TAG.apk"
+          (cd dist && sha256sum "pulso-$TAG.apk" > "pulso-$TAG.apk.sha256")
+          rm -f "$PULSO_KEYSTORE_FILE"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --title "Pulso $VERSION_NAME" \
+            --generate-notes \
+            $([[ "$VERSION_NAME" == 0.* ]] && echo --prerelease)

@@ -20,6 +20,33 @@ adb logcat -s Pulso:D AndroidRuntime:E
 
 No Windows substitua `./gradlew` por `.\\gradlew.bat`; `scripts/check.sh` requer Bash.
 
+## Release (GitHub Releases)
+
+O workflow `.github/workflows/release.yml` publica um APK de release assinado quando uma tag `vMAJOR.MINOR.PATCH` é enviada. Ele roda os testes unitários, `lintRelease` e `assembleRelease`, verifica a assinatura com `apksigner` e cria a release com o APK, o `.sha256` e notas geradas a partir dos commits. Versões `0.x` saem marcadas como pré-release.
+
+- `versionName` vem da tag (`v1.2.3` → `1.2.3`); `versionCode = MAJOR*10000 + MINOR*100 + PATCH` (minor/patch ≤ 99). Nunca reutilize nem reduza uma tag publicada: o Android recusa atualização com `versionCode` menor.
+- Assinatura somente por variáveis de ambiente (`PULSO_KEYSTORE_FILE`, `PULSO_KEYSTORE_PASSWORD`, `PULSO_KEY_ALIAS`, `PULSO_KEY_PASSWORD`). Sem elas `assembleRelease` gera APK não assinado e o workflow falha.
+
+### Configuração única da chave (feita pelo dono do repositório)
+
+1. Gere a keystore **fora do repositório** e guarde-a com backup seguro. Perder a chave impede atualizar o app instalado; quem a obtiver pode publicar atualizações falsas.
+   ```sh
+   keytool -genkeypair -keystore pulso-release.jks -alias pulso -keyalg RSA -keysize 4096 -validity 10000
+   ```
+2. Em *Settings → Secrets and variables → Actions*, crie: `PULSO_KEYSTORE_BASE64` (conteúdo de `base64 -w0 pulso-release.jks`; no PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes("pulso-release.jks"))`), `PULSO_KEYSTORE_PASSWORD`, `PULSO_KEY_ALIAS`, `PULSO_KEY_PASSWORD`.
+
+### Publicar
+
+```sh
+git tag -a v0.2.0 -m "Pulso 0.2.0"
+git push origin v0.2.0
+```
+
+### Instalar no aparelho
+
+- APK debug e release usam o mesmo `applicationId` com assinaturas diferentes: o Android não atualiza um sobre o outro. Antes de trocar de debug para release, **exporte o backup JSON** em Ajustes, desinstale, instale o release e importe o backup. Desinstalar apaga os dados locais.
+- Entre releases assinados com a mesma chave a atualização preserva os dados normalmente.
+
 ## Ciclo sugerido para agentes
 
 1. Resuma o ticket e escolha a spec específica.

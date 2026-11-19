@@ -13,14 +13,30 @@ android {
         applicationId = "dev.pulso.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // The release workflow overrides both from the git tag (-PversionCode / -PversionName).
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Release signing comes only from the environment (CI secrets or a local shell); no key material lives in the repo.
+    val releaseKeystore = System.getenv("PULSO_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("PULSO_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("PULSO_KEY_ALIAS")
+                keyPassword = System.getenv("PULSO_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Without the env vars assembleRelease still works but yields an unsigned APK (not installable).
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
