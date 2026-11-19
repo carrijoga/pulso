@@ -15,6 +15,7 @@ import dev.pulso.app.domain.InboxItem
 import dev.pulso.app.domain.RescheduleEntry
 import dev.pulso.app.domain.TaskDraft
 import dev.pulso.app.domain.TaskItem
+import dev.pulso.app.domain.TaskRules
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalTime
+import java.time.ZoneId
 
 data class PulsoUiState(
     val inbox: List<InboxItem> = emptyList(),
@@ -70,11 +72,25 @@ class PulsoViewModel(
     fun edit(id: String, draft: TaskDraft, done: (Throwable?) -> Unit = {}) = execute(done) {
         repository.editTask(id, draft)
     }
-    fun complete(id: String, completed: Boolean) = execute(failureMessage = true) { repository.setCompleted(id, completed) }
+    fun complete(id: String, completed: Boolean) = execute(failureMessage = true) {
+        val next = repository.setCompleted(id, completed)
+        if (next != null) {
+            val due = next.dueAt?.let { TaskRules.dueLabel(it, System.currentTimeMillis(), ZoneId.systemDefault()).text }
+            val text = if (due == null) "Concluída." else "Concluída. Próxima: $due"
+            _messages.tryEmit(UiMessage(text, "Desfazer") { execute(failureMessage = true) { repository.setCompleted(id, false) } })
+        }
+    }
 
     fun delete(id: String) = execute(failureMessage = true) {
         repository.deleteTask(id)
         _messages.tryEmit(UiMessage("Tarefa excluída.", "Desfazer") { execute { repository.restoreTask(id) } })
+    }
+
+    fun endRecurrence(id: String) = execute(failureMessage = true) {
+        repository.endRecurrence(id)
+        _messages.tryEmit(UiMessage("Repetição encerrada. Tarefa excluída.", "Desfazer") {
+            execute(failureMessage = true) { repository.restoreEndedRecurrence(id) }
+        })
     }
 
     fun reschedule(id: String, newDueAt: Long) = execute(failureMessage = true) { repository.reschedule(id, newDueAt) }
@@ -123,7 +139,7 @@ class PulsoViewModel(
     }
 }
 
-fun TaskItem.toDraft(): TaskDraft = TaskDraft(title, notes, category, priority, dueAt, links)
+fun TaskItem.toDraft(): TaskDraft = TaskDraft(title, notes, category, priority, dueAt, links, recurrence)
 
 class PulsoViewModelFactory(private val container: AppContainer) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")

@@ -124,7 +124,8 @@ fun ReviewScreen(
             ReviewTaskCard(task, actions) {
                 OutlinedButton(onClick = { move(task, 1) }) { Text("Amanhã") }
                 OutlinedButton(onClick = { move(task, 7) }) { Text("+7 dias") }
-                TextButton(onClick = { onClearDue(task) }) { Text("Sem prazo") }
+                // A repeating task needs its due date (the first occurrence); the editor explains why.
+                if (task.recurrence == null) TextButton(onClick = { onClearDue(task) }) { Text("Sem prazo") }
             }
         }
         if (review.frequentlyRescheduled.isNotEmpty()) {
@@ -135,7 +136,7 @@ fun ReviewScreen(
             }
             items(review.frequentlyRescheduled, key = { "f-" + it.id }) { task ->
                 ReviewTaskCard(task, actions) {
-                    TextButton(onClick = { onClearDue(task) }) { Text("Tirar prazo") }
+                    if (task.recurrence == null) TextButton(onClick = { onClearDue(task) }) { Text("Tirar prazo") }
                     TextButton(onClick = { actions.openTask(task) }) { Text("Editar") }
                 }
             }

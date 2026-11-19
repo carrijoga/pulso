@@ -1,6 +1,16 @@
 # SPEC 008 — Tarefas recorrentes (M1.5, WP1a + WP1)
 
-**Status:** Planejado. Depende do WP0 (SPEC 012). ADR: [0005](../adr/0005-recorrencia-por-ocorrencias.md).
+**Status:** Parcial (WP1a e WP1 implementados em 2026-11-19; unitários e instrumentados do repositório **EXECUTADOS** no emulador API 37 em 2026-11-19 (39/39, incluindo `RecurrenceRepositoryTest`); correções de revisão (ver Aceites) compiladas, instrumentados novos **não executados**; widget e Moto G84 pendentes). Depende do WP0 (SPEC 012). ADR: [0005](../adr/0005-recorrencia-por-ocorrencias.md).
+
+### Implementação (WP1)
+
+- Regras puras: `domain/RecurrenceRules.kt` (WP1a) e `domain/RecurrencePresets.kt` (opções do seletor, `adjust` de unidade/base/dias).
+- Repositório: `data/TaskRepository.kt`. `observeTasks` preenche `TaskItem.recurrence` e `recurrenceAnchorDueAt` (campo novo, a âncora é usada no rótulo mensal/anual). `setCompleted` devolve a ocorrência criada (`TaskItem?`). `deleteTask` = "Excluir só esta"; `endRecurrence` = "Encerrar repetição". Queries novas em DAOs existentes: `TaskDao.findOpenBySeries`, `ChecklistDao.activeForTask`. Schema, migrações e backup não mudaram.
+- UI: `ui/RecurrenceEditor.kt` (seletor "Repetir" com prévia "Próximas: …"), linha "Repetição" e confirmação de exclusão em `TaskEditorDialog`, ícone `Repeat` com descrição em `TaskCard`, snackbar "Concluída. Próxima: …" com "Desfazer" ao concluir uma ocorrência repetida.
+- Decisões: "Não repetir" encerra a série e mantém `seriesId` para histórico; alterar a regra de uma ocorrência ativa reinicia a âncora no `dueAt` atual; editar regra de uma ocorrência concluída é recusado ("Reabra a tarefa para mudar a repetição"); tarefa repetida não permite remover o prazo; excluir ocorrência já concluída (histórico) não gera próxima; checklist é copiado desmarcado para a próxima.
+- Revisão (2026-11-19): "Encerrar repetição" só para ocorrência aberta (o repositório recusa encerrar conclusão); "Desfazer" de encerrar restaura tarefa e série (`restoreEndedRecurrence`, só a série apagada no mesmo instante); "Sem prazo"/"Tirar prazo" ocultos para tarefas repetidas; repetição não começa em tarefa concluída sem série.
+- Invariante relaxada: "no máximo uma ocorrência aberta por série" vale na operação normal, mas o Desfazer de uma conclusão cuja próxima já foi editada mantém as duas abertas (sem apagar dados do usuário).
+- Limitações: "Pular esta vez" não implementado (botão não mostrado); ícone de repetição no widget não implementado (WP4 mexe em `widget/`); alterar só a hora de uma ocorrência não muda a série (segue a âncora original, conforme a tabela).
 
 ## Objetivo
 
@@ -80,11 +90,15 @@ Todas as escritas acima chamam `taskChanged` para a ocorrência afetada e para a
 
 ## Aceites
 
-- [x] `RecurrenceRulesTest` (29 testes, WP1a, 2026-11-19): diário/semanal múltiplos dias/intervalo 2/mensal dia 31/anual 29-fev/`COMPLETION`/atraso de vários dias/reagendamento manual/DST/validações inválidas.
-- [ ] Repositório (instrumentado): concluir cria exatamente uma próxima; concluir duas vezes não duplica; desfazer remove a próxima intocada; desfazer preserva próxima editada; encerrar série; excluir só esta; lembrete agendado para a nova (listener fake).
-- [ ] Organizar entrada da Inbox com repetição mantém `INBOX -> CONVERTED` atômico.
-- [ ] Backup v3 ida e volta com séries (coberto pela SPEC 012).
-- [ ] Manual: concluir pela notificação e pelo widget gera a próxima e atualiza o widget.
+- [x] `RecurrenceRulesTest` (29 testes, WP1a, 2026-11-19): diário/semanal múltiplos dias/intervalo 2/mensal dia 31/anual 29-fev/`COMPLETION`/atraso de vários dias/reagendamento manual/DST/validações inválidas. Evidência: `testDebugUnitTest` (2026-11-19, 95 testes no total, 0 falhas).
+- [x] `RecurrencePresetsTest` (6 testes, WP1): opções do seletor, dia da âncora no fuso (23:30 em São Paulo), DST de Nova York, `adjust` de dias/base. Evidência: mesmo `testDebugUnitTest`.
+- [x] Repositório (instrumentado, `RecurrenceRepositoryTest`, 15 testes; 12 executados no emulador API 37 em 2026-11-19, dentro da rodada 39/39): concluir cria exatamente uma próxima; concluir duas vezes não duplica; desfazer remove a próxima intocada; desfazer preserva próxima editada; encerrar série; excluir só esta (e desfazer); excluir histórico não gera próxima; "Não repetir"; mudança de regra reinicia âncora; sem prazo recusado; regra de concluída recusada; checklist copiado; organizar Inbox com repetição converte uma vez e cria uma série. Os 3 testes novos da revisão (desfazer de encerrar restaura tarefa e série; encerrar recusado em ocorrência concluída; repetição recusada em tarefa concluída sem série) estão **compilados, NÃO executados**.
+- [x] Lembrete agendado para a nova ocorrência: asserções de `listener.calls` nos testes de conclusão (`RecordingListener`), executados no emulador API 37 (2026-11-19).
+- [x] Organizar entrada da Inbox com repetição mantém `INBOX -> CONVERTED` atômico: teste `organizingRepeatingCaptureConvertsOnceAndCreatesOneSeries` (executado no emulador API 37, 2026-11-19).
+- [ ] Backup v3 ida e volta com séries (coberto pela SPEC 012; não verificado por teste de recorrência).
+- [ ] Manual: concluir pela notificação e pelo widget gera a próxima e atualiza o widget (não feito).
+- [ ] Manual: editor "Repetir" e rótulo no `TaskCard` em tela (não feito; só build e lint).
+- [ ] Pendente: diálogo de exclusão em fonte 200% e alvos ≥ 48dp (verificado só por código, não em tela).
 
 ## Fora de escopo
 
