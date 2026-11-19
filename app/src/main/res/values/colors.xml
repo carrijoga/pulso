@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pulso brand ("Brasa" coral + warm ink neutrals). Kotlin mirror: ui/theme/Color.kt -->
+    <color name="pulso_brasa">#FFE5533D</color>
+    <color name="pulso_brasa_light">#FFFF7A5C</color>
+    <color name="pulso_brasa_deep">#FFC2362A</color>
+    <color name="pulso_ink">#FF231917</color>
+    <color name="pulso_white">#FFFFFFFF</color>
+
+    <color name="window_background">#FFFFFBFA</color>
+    <color name="splash_background">#FFFFFBFA</color>
+
+    <!-- Widget surfaces (night variants in values-night) -->
+    <color name="widget_background">#FFFFFBFA</color>
+    <color name="widget_surface">#FFF7ECE8</color>
+    <color name="widget_on_surface">#FF231917</color>
+    <color name="widget_on_surface_variant">#FF6E5752</color>
+    <color name="widget_accent">#FFD9452F</color>
+    <color name="widget_on_accent">#FFFFFFFF</color>
+    <color name="widget_outline">#FFB39A95</color>
+    <color name="widget_overdue">#FFBA1A1A</color>
+    <color name="widget_today">#FF8A5100</color>
+</resources>

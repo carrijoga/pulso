@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="window_background">#FF16110F</color>
+    <color name="splash_background">#FF16110F</color>
+
+    <color name="widget_background">#FF1F1A18</color>
+    <color name="widget_surface">#FF2F2826</color>
+    <color name="widget_on_surface">#FFF1DFDB</color>
+    <color name="widget_on_surface_variant">#FFD8C2BD</color>
+    <color name="widget_accent">#FFFFB4A6</color>
+    <color name="widget_on_accent">#FF5F1407</color>
+    <color name="widget_outline">#FF7A6662</color>
+    <color name="widget_overdue">#FFFFB4AB</color>
+    <color name="widget_today">#FFFFB960</color>
+</resources>

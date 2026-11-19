@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Pulso</string>
+    <string name="app_tagline">Capture agora. Organize depois.</string>
+    <string name="widget_name">Pulso · Hoje</string>
+    <string name="widget_description">Suas próximas tarefas e captura rápida em um toque</string>
+    <string name="widget_preview_title">Hoje</string>
+    <string name="widget_preview_count">3 pendentes</string>
+    <string name="widget_preview_task_1">Pagar conta de luz</string>
+    <string name="widget_preview_task_2">Comprar ração</string>
+    <string name="widget_preview_task_3">Revisar anotações da aula</string>
+    <string name="widget_preview_due_1">Atrasada</string>
+    <string name="widget_preview_due_2">Hoje</string>
+    <string name="widget_preview_due_3">Sex</string>
+    <string name="widget_loading">Carregando…</string>
+    <string name="capture_shortcut_short">Capturar</string>
+    <string name="capture_shortcut_long">Capturar anotação</string>
+</resources>
