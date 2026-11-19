@@ -33,6 +33,7 @@ import android.app.TimePickerDialog
 import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -341,7 +342,8 @@ fun TaskEditorDialog(
                 val repeatAnchor = rule?.let { savedAnchor(it, existing, dueAt, System.currentTimeMillis()) }
                     ?: dueAt ?: System.currentTimeMillis()
                 val repeatLabel = rule?.let { RecurrenceRules.describe(it, repeatAnchor, zone) } ?: "Não repete"
-                OutlinedButton(onClick = { repeatOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { repeatOpen = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Icon(Icons.Rounded.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Repetir: $repeatLabel", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -349,6 +351,8 @@ fun TaskEditorDialog(
                 if (rule != null) {
                     Text(nextPreview(rule, repeatAnchor, zone), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Mudar data ou hora só desta ocorrência não altera a repetição.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (repeatOpen) RecurrenceDialog(current = recurrence, existing = existing, dueAt = dueAt, zone = zone,
                     onDismiss = { repeatOpen = false },
@@ -371,7 +375,8 @@ fun TaskEditorDialog(
             }
     }
     if (confirmDelete && onDelete != null) {
-        val repeating = existing?.recurrence != null && onEndSeries != null
+        // "Encerrar repetição" is offered only for an open occurrence; history never promises a next one.
+        val repeating = existing != null && existing.recurrence != null && !existing.isCompleted && onEndSeries != null
         AlertDialog(onDismissRequest = { confirmDelete = false },
             title = { Text("Excluir tarefa?") },
             text = {
@@ -380,10 +385,9 @@ fun TaskEditorDialog(
                 else "\"${text.trim()}\" sai das listas. Você pode desfazer logo em seguida.")
             },
             confirmButton = {
-                Button(onClick = { confirmDelete = false; onDelete() }) { Text(if (repeating) "Excluir só esta" else "Excluir") }
-            },
-            dismissButton = {
-                Row {
+                // Stacked vertically so the labels do not overflow at 200% font size.
+                Column(horizontalAlignment = Alignment.End) {
+                    Button(onClick = { confirmDelete = false; onDelete() }) { Text(if (repeating) "Excluir só esta" else "Excluir") }
                     if (repeating) TextButton(onClick = { confirmDelete = false; onEndSeries?.invoke() }) {
                         Text("Encerrar repetição")
                     }

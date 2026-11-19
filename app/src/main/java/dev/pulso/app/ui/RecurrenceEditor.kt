@@ -157,6 +157,7 @@ fun RecurrenceDialog(
                         unitOptions.forEachIndexed { index, (frequency, label) ->
                             SegmentedButton(selected = picked.frequency == frequency,
                                 onClick = { rule = RecurrencePresets.adjust(picked, frequency, picked.basis, anchorDay) },
+                                modifier = Modifier.heightIn(min = 48.dp),
                                 shape = SegmentedButtonDefaults.itemShape(index, unitOptions.size)) { Text(label) }
                         }
                     }
@@ -165,6 +166,7 @@ fun RecurrenceDialog(
                             .forEachIndexed { index, (basis, label) ->
                                 SegmentedButton(selected = picked.basis == basis,
                                     onClick = { rule = RecurrencePresets.adjust(picked, picked.frequency, basis, anchorDay) },
+                                    modifier = Modifier.heightIn(min = 48.dp),
                                     shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
                             }
                     }

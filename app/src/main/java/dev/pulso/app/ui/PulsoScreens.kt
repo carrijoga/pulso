@@ -293,7 +293,7 @@ fun PulsoScreens(vm: PulsoViewModel) {
             history = if (existing != null) remember(existing.id) { vm.rescheduleHistory(existing.id) }
                 else remember { kotlinx.coroutines.flow.flowOf(emptyList()) },
             onDelete = existing?.let { task -> { dismiss(); vm.delete(task.id) } },
-            onEndSeries = existing?.takeIf { it.recurrence != null }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } })
+            onEndSeries = existing?.takeIf { it.recurrence != null && !it.isCompleted }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } })
     }
     when (editor) {
         Editor.NewTask -> common(TaskDraft(title = ""), "Nova tarefa", null) { draft, done ->

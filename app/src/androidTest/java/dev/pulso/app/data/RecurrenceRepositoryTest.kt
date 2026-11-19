@@ -123,6 +123,43 @@ class RecurrenceRepositoryTest {
         assertEquals(id to null, listener.calls.last())
     }
 
+    @Test fun undoOfEndRecurrenceRestoresTaskAndSeries() = runTest {
+        repo.createTask(TaskDraft("Ler", dueAt = at("2026-01-05T09:00"), recurrence = daily))
+        val id = repo.observeTasks().first().single().id
+        repo.endRecurrence(id)
+        assertTrue(repo.observeTasks().first().isEmpty())
+
+        repo.restoreEndedRecurrence(id) // "Desfazer"
+        val restored = repo.observeTasks().first().single()
+        assertEquals(id, restored.id)
+        assertEquals(daily, restored.recurrence)
+        assertNull(db.seriesDao().findById(restored.seriesId!!)!!.deletedAt)
+        assertEquals(setOf(id), openIds())
+    }
+
+    @Test fun endRecurrenceIsRefusedForCompletedOccurrence() = runTest {
+        repo.createTask(TaskDraft("Pagar", dueAt = at("2026-01-05T09:00"), recurrence = daily))
+        val first = repo.observeTasks().first().single().id
+        clock.millis = at("2026-01-05T10:00")
+        val next = repo.setCompleted(first, true)!!.id
+
+        assertTrue(runCatching { repo.endRecurrence(first) }.isFailure)
+        assertEquals(setOf(next), openIds()) // the next occurrence and the series survive
+        assertNull(db.seriesDao().findById(db.taskDao().findById(next)!!.seriesId!!)!!.deletedAt)
+    }
+
+    @Test fun repetitionCannotStartOnCompletedPlainTask() = runTest {
+        repo.createTask(TaskDraft("Avulsa", dueAt = at("2026-01-05T09:00")))
+        val id = repo.observeTasks().first().single().id
+        clock.millis = at("2026-01-05T10:00")
+        repo.setCompleted(id, true)
+
+        assertTrue(runCatching { repo.editTask(id, TaskDraft("Avulsa", dueAt = at("2026-01-05T09:00"), recurrence = daily)) }
+            .isFailure)
+        assertNull(repo.observeTasks().first().single().recurrence)
+        assertTrue(db.seriesDao().allForBackup().isEmpty())
+    }
+
     @Test fun deleteOccurrenceCreatesNextAndUndoRemovesIt() = runTest {
         repo.createTask(TaskDraft("Pagar", dueAt = at("2026-01-05T09:00"), recurrence = daily))
         val id = repo.observeTasks().first().single().id

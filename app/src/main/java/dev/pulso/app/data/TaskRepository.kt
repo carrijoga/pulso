@@ -37,8 +37,10 @@ interface TaskRepository {
     suspend fun setCompleted(id: String, completed: Boolean): TaskItem?
     /** "Excluir só esta": deletes this occurrence; an open occurrence of a series generates the next one. */
     suspend fun deleteTask(id: String)
-    /** "Encerrar repetição": deletes this occurrence and ends its series. */
+    /** "Encerrar repetição": deletes this open occurrence and ends its series. Completed ones are refused. */
     suspend fun endRecurrence(id: String)
+    /** Undo of [endRecurrence]: restores the occurrence and the series that the same end tombstoned. */
+    suspend fun restoreEndedRecurrence(id: String)
     /** Undo of [deleteTask]: restores it and removes the untouched next occurrence it generated. */
     suspend fun restoreTask(id: String)
     /** Moves the due date (recording history). Clears any snooze. */
@@ -232,12 +234,30 @@ class LocalTaskRepository(
         val mutation = database.withTransaction {
             val original = taskDao.findById(id)
             if (original == null || original.deletedAt != null) return@withTransaction Mutation.NONE
+            // Only an open occurrence offers "Encerrar"; ending from history would silently drop the next one.
+            require(original.completedAt == null) { "Só é possível encerrar a repetição de uma tarefa aberta." }
             original.seriesId?.let { seriesDao.findById(it) }?.takeIf { it.deletedAt == null }?.let { series ->
                 seriesDao.upsert(series.copy(deletedAt = timestamp, updatedAt = timestamp))
             }
             val tombstone = original.copy(deletedAt = timestamp, updatedAt = timestamp)
             taskDao.upsert(tombstone)
             Mutation(listOf(tombstone))
+        }
+        mutation.changed.forEach { notify(it) }
+    }
+
+    override suspend fun restoreEndedRecurrence(id: String) {
+        val timestamp = now()
+        val mutation = database.withTransaction {
+            val original = taskDao.findById(id)
+            if (original == null || original.deletedAt == null) return@withTransaction Mutation.NONE
+            // Only the series tombstoned by the same end (same instant) is revived.
+            original.seriesId?.let { seriesDao.findById(it) }?.takeIf { it.deletedAt == original.deletedAt }?.let { series ->
+                seriesDao.upsert(series.copy(deletedAt = null, updatedAt = timestamp))
+            }
+            val restored = original.copy(deletedAt = null, updatedAt = timestamp)
+            taskDao.upsert(restored)
+            Mutation(listOf(restored))
         }
         mutation.changed.forEach { notify(it) }
     }
@@ -313,7 +333,9 @@ class LocalTaskRepository(
     private suspend fun syncSeries(original: TaskEntity, draft: TaskDraft, rule: RecurrenceRule?, at: Long): String? {
         val current = original.seriesId?.let { seriesDao.findById(it) }?.takeIf { it.deletedAt == null }
         if (current == null) {
-            return if (rule == null) original.seriesId else createSeries(draft, at)
+            if (rule == null) return original.seriesId
+            require(original.completedAt == null) { "Reabra a tarefa para mudar a repetição." }
+            return createSeries(draft, at)
         }
         if (current.toRule() == rule) return current.id
         require(original.completedAt == null) { "Reabra a tarefa para mudar a repetição." }

@@ -88,7 +88,9 @@ class PulsoViewModel(
 
     fun endRecurrence(id: String) = execute(failureMessage = true) {
         repository.endRecurrence(id)
-        _messages.tryEmit(UiMessage("Repetição encerrada."))
+        _messages.tryEmit(UiMessage("Repetição encerrada. Tarefa excluída.", "Desfazer") {
+            execute(failureMessage = true) { repository.restoreEndedRecurrence(id) }
+        })
     }
 
     fun reschedule(id: String, newDueAt: Long) = execute(failureMessage = true) { repository.reschedule(id, newDueAt) }
