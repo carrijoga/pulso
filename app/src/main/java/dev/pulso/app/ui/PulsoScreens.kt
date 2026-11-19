@@ -80,6 +80,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -113,6 +114,11 @@ import dev.pulso.app.ui.components.PulseMark
 import dev.pulso.app.ui.components.relativeTime
 import dev.pulso.app.ui.theme.LocalPulsoColors
 import dev.pulso.app.ui.theme.PulsoMotion
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -164,10 +170,10 @@ fun PulsoScreens(vm: PulsoViewModel) {
     val habitState by habitVm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) {
-        vm.messages.collect { message -> showUiMessage(snackbar, message) }
+        vm.messages.collect { message -> showLatestMessage(snackbar, message) }
     }
     LaunchedEffect(habitVm) {
-        habitVm.messages.collect { message -> showUiMessage(snackbar, message) }
+        habitVm.messages.collect { message -> showLatestMessage(snackbar, message) }
     }
     val notifications = rememberNotificationPermission(state.settings.notificationPromptShown, vm::notificationPromptShown)
     val actions = ScreenActions(
@@ -339,7 +345,16 @@ private fun TodayScreen(
     val active = state.tasks.filterNot { it.isCompleted }
     val due = active.filter { TaskRules.isDueTodayOrOverdue(it, now, zone) }.sortedBy { it.dueAt }
     val upcoming = active.filterNot { it in due }
-    val today = LocalDate.now(zone)
+    // "Today" must not go stale while the app stays in memory across midnight: re-read it on every resume.
+    var today by remember { mutableStateOf(LocalDate.now(zone)) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) today = LocalDate.now(zone)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     val doneToday = state.tasks.count { task ->
         task.completedAt?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() == today } == true
     }
@@ -356,7 +371,7 @@ private fun TodayScreen(
                 "Organize quando tiver um tempinho.", "Ver", onOpenInbox, Modifier.animateItem())
         }
         habitTodaySection(habits, today, zone,
-            onCheck = { habit, checked -> habitVm.setChecked(habit, today, checked) }, onManage = onOpenHabits)
+            onCheck = { habit, checked -> habitVm.setCheckedToday(habit, checked) }, onManage = onOpenHabits)
         item(key = "h-due") { SectionHeading("Vencidas e para hoje (${due.size})") }
         if (state.loaded && due.isEmpty()) item(key = "e-due") { EmptyMessage("Nada vence hoje. Respire.") }
         items(due, key = { it.id }) {
@@ -582,10 +597,17 @@ private fun TaskScreen(state: PulsoUiState, actions: ScreenActions, listState: L
     }
 }
 
-/** Shows a one-shot message; runs the undo action only when the user taps it. */
-private suspend fun showUiMessage(snackbar: SnackbarHostState, message: UiMessage) {
-    val result = snackbar.showSnackbar(message.text, actionLabel = message.undoLabel,
-        withDismissAction = message.undoLabel == null,
-        duration = if (message.undo != null) SnackbarDuration.Long else SnackbarDuration.Short)
-    if (result == SnackbarResult.ActionPerformed) message.undo?.invoke()
+/**
+ * Shows the newest message at once: it dismisses the snackbar on screen instead of queueing behind it.
+ * Each message is shown in its own coroutine so the collector keeps receiving. The undo runs only when
+ * the user taps its action; a message replaced before that is discarded.
+ */
+private fun CoroutineScope.showLatestMessage(snackbar: SnackbarHostState, message: UiMessage) {
+    snackbar.currentSnackbarData?.dismiss()
+    launch {
+        val result = snackbar.showSnackbar(message.text, actionLabel = message.undoLabel,
+            withDismissAction = message.undoLabel == null,
+            duration = if (message.undo != null) SnackbarDuration.Long else SnackbarDuration.Short)
+        if (result == SnackbarResult.ActionPerformed) message.undo?.invoke()
+    }
 }

@@ -108,8 +108,6 @@ internal fun LazyListScope.habitTodaySection(
 @Composable
 private fun HabitTodayRow(item: HabitToday, onCheck: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val name = item.habit.name
-    // Streaks of TIMES_PER_WEEK count weeks; the other schedules count days.
-    val streakUnit = if (item.habit.scheduleType == HabitScheduleType.TIMES_PER_WEEK) "semanas" else "dias"
     Surface(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Row(Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
@@ -124,7 +122,7 @@ private fun HabitTodayRow(item: HabitToday, onCheck: (Boolean) -> Unit, modifier
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${item.progress.done}/${item.progress.target} nesta semana",
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (item.streak >= 2) Text("${item.streak} $streakUnit seguidas",
+                if (item.streak >= 2) Text(HabitRules.streakText(item.habit, item.streak),
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
         }

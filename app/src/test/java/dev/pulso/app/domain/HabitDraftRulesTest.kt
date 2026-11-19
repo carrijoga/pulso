@@ -81,6 +81,21 @@ class HabitDraftRulesTest {
         assertEquals(mapOf("A" to 0, "B" to 1), HabitRules.positionsAfterMove(listOf("A", "B"), "Z", 0))
     }
 
+    @Test fun `streak text agrees with the unit of the schedule`() {
+        fun habit(type: HabitScheduleType) =
+            Habit("h1", "Ler", "", type, emptySet(), if (type == HabitScheduleType.TIMES_PER_WEEK) 3 else 0, null, 0, false, 0L)
+
+        val daily = habit(HabitScheduleType.DAILY)
+        assertEquals("2 dias seguidos", HabitRules.streakText(daily, 2))
+        assertEquals("15 dias seguidos", HabitRules.streakText(daily, 15))
+        assertEquals("1 dia seguido", HabitRules.streakText(daily, 1))
+        assertEquals("2 dias seguidos", HabitRules.streakText(habit(HabitScheduleType.DAYS_OF_WEEK), 2))
+
+        val weekly = habit(HabitScheduleType.TIMES_PER_WEEK)
+        assertEquals("3 semanas seguidas", HabitRules.streakText(weekly, 3))
+        assertEquals("1 semana seguida", HabitRules.streakText(weekly, 1))
+    }
+
     @Test fun `creation date is the local day of the zone, across a DST change`() {
         // New York ends DST on 2026-11-01 at 02:00; 23:30 that night is already 04:30 UTC of the next day.
         val createdAt = LocalDateTime.of(2026, 11, 1, 23, 30).atZone(newYork).toInstant().toEpochMilli()

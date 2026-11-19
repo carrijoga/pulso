@@ -55,8 +55,9 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
 
     fun move(id: String, newPosition: Int) = execute(failureMessage = true) { repository.move(id, newPosition) }
 
-    fun setChecked(habit: Habit, date: LocalDate, checked: Boolean) = execute(failureMessage = true) {
-        repository.setChecked(habit.id, date, checked)
+    /** Checks today (the day is read when the action runs). Messages only when something was written. */
+    fun setCheckedToday(habit: Habit, checked: Boolean) = execute(failureMessage = true) {
+        val date = repository.setCheckedToday(habit.id, checked) ?: return@execute
         _messages.tryEmit(UiMessage(
             if (checked) "${habit.name} marcado como feito." else "${habit.name} desmarcado.", "Desfazer",
         ) { execute { repository.setChecked(habit.id, date, !checked) } })

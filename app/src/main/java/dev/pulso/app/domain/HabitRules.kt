@@ -189,6 +189,17 @@ object HabitRules {
             .toList()
     }
 
+    /**
+     * Streak line for Hoje. TIMES_PER_WEEK counts weeks (feminine: "seguidas"); the other schedules
+     * count days (masculine: "seguidos").
+     */
+    fun streakText(habit: Habit, streak: Int): String =
+        if (habit.scheduleType == HabitScheduleType.TIMES_PER_WEEK) {
+            if (streak == 1) "1 semana seguida" else "$streak semanas seguidas"
+        } else {
+            if (streak == 1) "1 dia seguido" else "$streak dias seguidos"
+        }
+
     fun describe(habit: Habit): String = when (habit.scheduleType) {
         HabitScheduleType.DAILY -> "Todo dia"
         HabitScheduleType.TIMES_PER_WEEK -> "${habit.timesPerWeek}x por semana"

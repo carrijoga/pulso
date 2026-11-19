@@ -40,8 +40,16 @@ interface HabitRepository {
     /**
      * Marks or unmarks the habit for [date]. Only today and the 7 previous days are accepted
      * ([HabitRules.canCheck]). Idempotent; reuses the same row (and UUID) for the same (habit, day).
+     * Returns true only if the stored state changed; false for a no-op, a deleted or unknown habit,
+     * or an archived habit being checked.
      */
-    suspend fun setChecked(habitId: String, date: LocalDate, checked: Boolean)
+    suspend fun setChecked(habitId: String, date: LocalDate, checked: Boolean): Boolean
+
+    /**
+     * Same as [setChecked] for the current local day, read from the clock at the moment of the call.
+     * Returns the date written, or null when nothing changed.
+     */
+    suspend fun setCheckedToday(habitId: String, checked: Boolean): LocalDate?
 }
 
 /**
@@ -123,30 +131,44 @@ class LocalHabitRepository(
         }
     }
 
-    override suspend fun setChecked(habitId: String, date: LocalDate, checked: Boolean) {
-        val today = Instant.ofEpochMilli(now()).atZone(zone).toLocalDate()
-        require(HabitRules.canCheck(date, today)) { "Só dá para marcar hoje ou nos 7 dias anteriores." }
-        database.withTransaction {
-            val habit = habitDao.findById(habitId) ?: return@withTransaction
-            if (habit.deletedAt != null || (checked && habit.archivedAt != null)) return@withTransaction
+    override suspend fun setChecked(habitId: String, date: LocalDate, checked: Boolean): Boolean {
+        require(HabitRules.canCheck(date, today())) { "Só dá para marcar hoje ou nos 7 dias anteriores." }
+        return database.withTransaction {
+            val habit = habitDao.findById(habitId) ?: return@withTransaction false
+            if (habit.deletedAt != null || (checked && habit.archivedAt != null)) return@withTransaction false
             writeCheckin(habitId, date.toString(), checked)
         }
     }
 
+    override suspend fun setCheckedToday(habitId: String, checked: Boolean): LocalDate? {
+        val day = today()
+        return if (setChecked(habitId, day, checked)) day else null
+    }
+
+    private fun today(): LocalDate = Instant.ofEpochMilli(now()).atZone(zone).toLocalDate()
+
     /**
      * Never REPLACE here (see [HabitCheckinDao]): find the row for (habit, day) including tombstones,
-     * then update it in place, or insert a new row only when none exists.
+     * then update it in place, or insert a new row only when none exists. Returns true if it wrote.
      */
-    private suspend fun writeCheckin(habitId: String, date: String, checked: Boolean) {
+    private suspend fun writeCheckin(habitId: String, date: String, checked: Boolean): Boolean {
         val timestamp = now()
         val existing = checkinDao.findByHabitAndDate(habitId, date)
-        if (existing == null) {
-            if (checked) checkinDao.insert(HabitCheckinEntity(UUID.randomUUID().toString(), habitId, date,
-                createdAt = timestamp, updatedAt = timestamp))
-        } else if (checked && existing.deletedAt != null) {
-            checkinDao.update(existing.copy(deletedAt = null, updatedAt = timestamp))
-        } else if (!checked && existing.deletedAt == null) {
-            checkinDao.update(existing.copy(deletedAt = timestamp, updatedAt = timestamp))
+        return when {
+            existing == null -> if (checked) {
+                checkinDao.insert(HabitCheckinEntity(UUID.randomUUID().toString(), habitId, date,
+                    createdAt = timestamp, updatedAt = timestamp))
+                true
+            } else false
+            checked && existing.deletedAt != null -> {
+                checkinDao.update(existing.copy(deletedAt = null, updatedAt = timestamp))
+                true
+            }
+            !checked && existing.deletedAt == null -> {
+                checkinDao.update(existing.copy(deletedAt = timestamp, updatedAt = timestamp))
+                true
+            }
+            else -> false
         }
     }
 

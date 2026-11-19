@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -185,6 +187,25 @@ class LocalHabitRepositoryTest {
 
         assertEquals(listOf(today.minusDays(1), today),
             repo.observeCheckins(today.minusDays(1), today).first().map { it.date })
+    }
+
+    @Test fun setCheckedTodayReadsTheClockOnEveryCall() = runTest {
+        val habit = createAndGet("Ler")
+        assertEquals(today, repo.setCheckedToday(habit.id, true))
+        clock.advance(86_400_000L) // next day, same local time
+        assertEquals(today.plusDays(1), repo.setCheckedToday(habit.id, true))
+        assertEquals(listOf(today, today.plusDays(1)),
+            repo.observeCheckins(today, today.plusDays(1)).first().map { it.date })
+    }
+
+    @Test fun setCheckedReportsWhetherAnythingChanged() = runTest {
+        val habit = createAndGet("Ler")
+        assertTrue(repo.setChecked(habit.id, today, true))
+        assertFalse(repo.setChecked(habit.id, today, true)) // already checked: no change
+        assertNull(repo.setCheckedToday(habit.id, true))
+        repo.deleteHabit(habit.id)
+        assertFalse(repo.setChecked(habit.id, today, false))
+        assertFalse(repo.setChecked("unknown", today, true))
     }
 
     private suspend fun assertRejected(block: suspend () -> Unit) {
