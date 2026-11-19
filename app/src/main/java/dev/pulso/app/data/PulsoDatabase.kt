@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.pulso.app.domain.CategoryRules
@@ -129,19 +130,45 @@ interface HabitDao {
     suspend fun importUnseen(items: List<HabitEntity>)
 }
 
+/**
+ * Check-ins of habits, one row per (habitId, date), enforced by a UNIQUE index.
+ *
+ * Never use `REPLACE` here: on SQLite, REPLACE resolves a unique-index conflict by DELETING the
+ * existing row, which would silently destroy a tombstoned check-in (data loss, see AGENTS.md).
+ *
+ * Required write pattern (WP2 `setChecked`):
+ * 1. `findByHabitAndDate(habitId, date)`, which also returns tombstoned rows;
+ * 2. if it exists, `update(copy)` to restore (`deletedAt = null`) or to apply a tombstone
+ *    (`deletedAt = now`), keeping the same `id`;
+ * 3. if it does not exist, `insert(new)` with a new UUID.
+ * A plain `insert` of a second UUID for the same (habitId, date) throws instead of replacing.
+ */
 @Dao
 interface HabitCheckinDao {
     @Query("SELECT * FROM habit_checkins WHERE deletedAt IS NULL")
     fun observeActive(): Flow<List<HabitCheckinEntity>>
 
+    /** Active check-ins with `from <= date <= to` (inclusive, ISO yyyy-MM-dd text comparison). */
+    @Query("SELECT * FROM habit_checkins WHERE deletedAt IS NULL AND date BETWEEN :from AND :to ORDER BY date")
+    fun observeBetween(from: String, to: String): Flow<List<HabitCheckinEntity>>
+
     @Query("SELECT * FROM habit_checkins WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): HabitCheckinEntity?
+
+    /** Returns the row for this habit and day even when it is tombstoned (`deletedAt` set). */
+    @Query("SELECT * FROM habit_checkins WHERE habitId = :habitId AND date = :date LIMIT 1")
+    suspend fun findByHabitAndDate(habitId: String, date: String): HabitCheckinEntity?
 
     @Query("SELECT * FROM habit_checkins")
     suspend fun allForBackup(): List<HabitCheckinEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(item: HabitCheckinEntity)
+    /** ABORT: a conflicting (habitId, date) with another UUID fails and leaves the existing row intact. */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(item: HabitCheckinEntity)
+
+    /** Updates the row with the same `id`; use it to restore or tombstone (see the class KDoc). */
+    @Update
+    suspend fun update(item: HabitCheckinEntity)
 
     /** IGNORE also skips a duplicate (habitId, date) under another UUID: the local row wins. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)

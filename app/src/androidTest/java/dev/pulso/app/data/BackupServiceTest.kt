@@ -96,8 +96,8 @@ class BackupServiceTest {
         db.seriesDao().upsert(SeriesEntity("s1", "WEEKLY", 2, 21, "SCHEDULE", now(), now(), now()))
         db.taskDao().upsert(TaskEntity("t1", "Recorrente", "", "Casa", "NORMAL", now(), null, now(), now(), seriesId = "s1"))
         db.habitDao().upsert(HabitEntity("h1", "Meditar", scheduleType = "DAYS_OF_WEEK", daysOfWeek = 5, createdAt = now(), updatedAt = now()))
-        db.habitCheckinDao().upsert(HabitCheckinEntity("c1", "h1", "2026-01-05", now(), now()))
-        db.habitCheckinDao().upsert(HabitCheckinEntity("c2", "h1", "2026-01-06", now(), now(), deletedAt = now()))
+        db.habitCheckinDao().insert(HabitCheckinEntity("c1", "h1", "2026-01-05", now(), now()))
+        db.habitCheckinDao().insert(HabitCheckinEntity("c2", "h1", "2026-01-06", now(), now(), deletedAt = now()))
         db.checklistDao().upsert(ChecklistItemEntity("k1", "t1", "Item", 0, now(), now(), now()))
     }
 
@@ -181,7 +181,7 @@ class BackupServiceTest {
 
     @Test fun duplicateCheckinForSameHabitAndDayWithDifferentUuidKeepsLocalRow() = runTest {
         target.habitDao().upsert(HabitEntity("h1", "Meditar", scheduleType = "DAILY", createdAt = 1, updatedAt = 1))
-        target.habitCheckinDao().upsert(HabitCheckinEntity("local", "h1", "2026-01-05", 1, 1))
+        target.habitCheckinDao().insert(HabitCheckinEntity("local", "h1", "2026-01-05", 1, 1))
         val json = JSONObject(fixture("backup-v3.json"))
         json.getJSONArray("habits").getJSONObject(0).put("id", "h1")
         json.getJSONArray("habitCheckins").getJSONObject(0).put("habitId", "h1").put("date", "2026-01-05").put("id", "remote")

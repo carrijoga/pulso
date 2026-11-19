@@ -62,7 +62,8 @@ interface HabitRepository {
 }
 ```
 
-- `setChecked` valida `canCheck`; usa o índice único (`habitId`,`date`): se existe linha com tombstone, restaura; se não existe, insere. Desmarcar = `deletedAt`. Idempotente.
+- `setChecked` valida `canCheck`; usa o índice único (`habitId`,`date`): `findByHabitAndDate` (retorna também linha com tombstone); se existe, `update` restaura (`deletedAt = null`) ou aplica tombstone (desmarcar) mantendo o mesmo `id`; se não existe, `insert` com UUID novo. Idempotente.
+- **Nunca `REPLACE`** em `habit_checkins`: no SQLite, REPLACE resolve conflito de índice único apagando a linha antiga (perderia o tombstone). `insert` usa `ABORT`; a regra está no KDoc de `HabitCheckinDao`. Coberto por `HabitCheckinDaoTest`.
 - Excluir hábito: tombstone + "Desfazer" (padrão atual de tarefas). Check-ins não são apagados.
 - Hábitos não passam pelo `TaskChangeListener`; se o widget passar a mostrar hábitos (fora de escopo agora), criar porta própria.
 

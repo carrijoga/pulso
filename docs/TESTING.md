@@ -21,6 +21,13 @@ Use `am instrument` num aparelho/emulador com dados que importam: `connectedDebu
 
 **Status (2026-11-19):** 12 testes passando no emulador API 37 e no Moto G84 5G (Android 15, via `am instrument`) (`LocalTaskRepositoryTest`, `MigrationTest`, `BackupServiceTest`). Também verificado: instalar a v2 sobre um banco v1 real migra sem perda e preserva o tema escolhido.
 
+### Correção de check-ins (2026-11-19, emulador API 37, `am instrument`)
+
+- Unitários: 80 passando; `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` OK (JBR da instalação do Android Studio, versão 25; `ANDROID_HOME` apontando para o SDK).
+- Instrumentados: **27 passando** (`BackupServiceTest` 10, `HabitCheckinDaoTest` 5, `LocalTaskRepositoryTest` 7, `MigrationTest` 5). `HabitCheckinDaoTest`: tombstone + restauração reaproveitam a mesma linha e UUID; insert de outro UUID na mesma (habitId, date) lança `SQLiteConstraintException` e preserva a linha (inclusive tombstone); `observeBetween` com limites inclusivos e sem tombstones; `findByHabitAndDate` encontra tombstone.
+- Schema não mudou (v3); migração e backup rodados como regressão.
+- **NÃO EXECUTADO:** Moto G84 (não usado nesta etapa).
+
 ### WP0 / schema v3 (2026-11-19, emulador API 37, `am instrument`)
 
 - Unitários: 22 passando (inclui `DaysOfWeekMaskTest`). Lint e `assembleDebug` OK (JBR 21).
