@@ -80,7 +80,7 @@ Se implementado: canal próprio "Lembretes de hábitos"; `reminderMinutes` por h
 
 ## Aceites
 
-- [ ] `HabitRulesTest`: as três agendas; sequência com dia de hoje pendente; dias não agendados; extra fora da agenda; semana com meta atingida/não; `createdOn`; limite de 7 dias; virada de semana; troca de fuso não muda datas já gravadas.
+- [x] `HabitRulesTest` (28 testes, passando em 2026-11-19): as três agendas; sequência com dia de hoje pendente; dias não agendados; extra fora da agenda; semana com meta atingida/não; `createdOn`; limite de 7 dias; virada de semana; troca de fuso não muda datas já gravadas.
 - [ ] Repositório (instrumentado): marcar/desmarcar/remarcar reaproveita a linha; marcar duas vezes não duplica; data futura rejeitada; excluir/restaurar hábito preserva check-ins.
 - [ ] Backup v3 com hábitos e check-ins (SPEC 012).
 - [ ] Manual: TalkBack anuncia estado; fonte grande sem corte na seção de Hoje.
