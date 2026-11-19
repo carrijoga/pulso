@@ -35,7 +35,7 @@ Plano, pacotes de trabalho e decisões pendentes: [`docs/PLANO-M1.5.md`](PLANO-M
 
 - [x] Schema v3, backup v3 e testes de migração mais abrangentes (WP0 implementado e validado no emulador; migração real v2→v3 conferida; falta só conferir no Moto G84) — [SPEC 012](specs/012-schema-v3-backup-e-migracoes.md) (WP0, base dos demais).
 - [ ] Tarefas recorrentes — [SPEC 008](specs/008-tarefas-recorrentes.md).
-- [ ] Hábitos — [SPEC 009](specs/009-habitos.md).
+- [~] Hábitos (WP2 implementado: repositório, seção em Hoje, sobreposição "Hábitos" por Hoje e Ajustes; unitários passando; instrumentados escritos e não executados; sem validação em emulador/Moto G84; lembretes P2 fora) — [SPEC 009](specs/009-habitos.md).
 - [ ] Calendário semanal — [SPEC 010](specs/010-calendario-semanal.md).
 - [~] Captura por voz (WP4 implementado: botão nas capturas, atalho, aviso de privacidade; validado no emulador API 37 sem fala real; falta Moto G84; botão no widget fica pendente, P2) — [SPEC 011](specs/011-captura-por-voz.md).
 - [ ] Organização por compras, estudos, manutenção, casamento, encomendas (tela por categoria, checklist) — [SPEC 013](specs/013-visoes-por-categoria-e-checklist.md).

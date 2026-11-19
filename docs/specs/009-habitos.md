@@ -1,6 +1,6 @@
 # SPEC 009 — Hábitos (M1.5, WP2a + WP2)
 
-**Status:** Planejado. Depende do WP0 (SPEC 012). ADR: [0006](../adr/0006-habitos-separados.md).
+**Status:** Parcial (WP2 implementado na branch `m1.5/wp2-habitos`; falta executar os instrumentados e validar a UI no emulador/Moto G84). Depende do WP0 (SPEC 012). ADR: [0006](../adr/0006-habitos-separados.md).
 
 ## Objetivo
 
@@ -87,9 +87,19 @@ Se implementado: canal próprio "Lembretes de hábitos"; `reminderMinutes` por h
 ## Aceites
 
 - [x] `HabitRulesTest` (37 testes, passando em 2026-11-19): as três agendas; sequência com dia de hoje pendente; dias não agendados; extra fora da agenda; semana com meta atingida/não; `createdOn`; meta proporcional na semana de criação (3x sexta/sábado, diária quinta, seg/qua/sex quinta, sábado sem dias restantes, semana seguinte com meta cheia, criado no domingo); limite de 7 dias; virada de semana; troca de fuso não muda datas já gravadas.
-- [ ] Repositório (instrumentado): marcar/desmarcar/remarcar reaproveita a linha; marcar duas vezes não duplica; data futura rejeitada; excluir/restaurar hábito preserva check-ins.
-- [ ] Backup v3 com hábitos e check-ins (SPEC 012).
-- [ ] Manual: TalkBack anuncia estado; fonte grande sem corte na seção de Hoje.
+- [~] Repositório (instrumentado): `LocalHabitRepositoryTest` (12 testes) cobre marcar/desmarcar/remarcar na mesma linha, marcar duas vezes sem duplicar, data futura e além de 7 dias rejeitadas, excluir/restaurar preservando check-ins, arquivado não marcável, movimentação e edição. **Compila (`:app:compileDebugAndroidTestKotlin`); NÃO EXECUTADO** (emulador compartilhado).
+- [~] Backup v3 com hábitos e check-ins (SPEC 012): coberto pelo WP0 (`BackupServiceTest`, executado no WP0); não reexecutado nesta etapa.
+- [ ] Manual: TalkBack anuncia estado; fonte grande sem corte na seção de Hoje. Não feito (sem emulador/aparelho nesta etapa).
+- [x] Unitários de regras novas: `HabitDraftRulesTest` (10): validação do rascunho por agenda, limites de nome/observações, reordenação (subir, descer, limites, id desconhecido), `createdOn` em fusos com horário de verão (New York, Lisboa). `:app:testDebugUnitTest` passando com 99 testes no total.
+
+### Decisões de implementação (WP2)
+
+- `HabitRepository` (interface) + `LocalHabitRepository`; `now` e `zone` injetados. `setChecked` rejeita datas fora da janela de `canCheck` com `IllegalArgumentException` (mensagem exibida no snackbar). Check-in em hábito arquivado é ignorado ao marcar; desmarcar continua permitido.
+- `move(id, newPosition)`: `newPosition` é o índice final na lista de hábitos não excluídos, arquivados incluídos. A UI passa o índice do vizinho.
+- Excluir: confirmação no editor e depois "Desfazer" (padrão de tarefas). Check-ins ficam.
+- Hoje: a seção só aparece com hábitos devidos hoje; "Gerenciar" abre a sobreposição. Sequência em `TIMES_PER_WEEK` aparece em semanas ("3 semanas seguidas"), nas demais em dias.
+- Lembretes de hábito (P2) não implementados; o campo `reminderMinutes` não é usado.
+- A aba "Semana" (WP3) não foi tocada.
 
 ## Fora de escopo
 

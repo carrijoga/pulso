@@ -125,7 +125,7 @@ private enum class Tab(val label: String, val selectedIcon: ImageVector, val ico
     TASKS("Tarefas", Icons.Rounded.TaskAlt, Icons.Outlined.TaskAlt),
     SETTINGS("Ajustes", Icons.Rounded.Settings, Icons.Outlined.Settings),
 }
-private enum class Overlay(val title: String) { SEARCH("Buscar"), REVIEW("Revisão semanal") }
+private enum class Overlay(val title: String) { SEARCH("Buscar"), REVIEW("Revisão semanal"), HABITS("Hábitos") }
 
 /** Which editor sheet is open. Stored as ids so it survives rotation and follows Room updates. */
 private sealed interface Editor {
@@ -160,14 +160,14 @@ fun PulsoScreens(vm: PulsoViewModel) {
             else -> null
         }
     }
+    val habitVm = habitViewModel()
+    val habitState by habitVm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) {
-        vm.messages.collect { message ->
-            val result = snackbar.showSnackbar(message.text, actionLabel = message.undoLabel,
-                withDismissAction = message.undoLabel == null,
-                duration = if (message.undo != null) SnackbarDuration.Long else SnackbarDuration.Short)
-            if (result == SnackbarResult.ActionPerformed) message.undo?.invoke()
-        }
+        vm.messages.collect { message -> showUiMessage(snackbar, message) }
+    }
+    LaunchedEffect(habitVm) {
+        habitVm.messages.collect { message -> showUiMessage(snackbar, message) }
     }
     val notifications = rememberNotificationPermission(state.settings.notificationPromptShown, vm::notificationPromptShown)
     val actions = ScreenActions(
@@ -272,12 +272,16 @@ fun PulsoScreens(vm: PulsoViewModel) {
                             onOpenInbox = { overlay = null; tab = Tab.INBOX },
                             onFinish = { vm.markReviewDone(); overlay = null })
                     }
+                    Overlay.HABITS.name -> HabitManagerScreen(habitState, habitVm)
                     Tab.TODAY.name -> TodayScreen(state, actions, listStates.getValue(Tab.TODAY),
-                        onReview = { overlay = Overlay.REVIEW },
+                        habits = habitState, habitVm = habitVm,
+                        onReview = { overlay = Overlay.REVIEW }, onOpenHabits = { overlay = Overlay.HABITS },
                         onOpenInbox = { tab = Tab.INBOX }, onOpenTasks = { tab = Tab.TASKS })
                     Tab.INBOX.name -> InboxScreen(state.inbox, vm, actions, listStates.getValue(Tab.INBOX))
                     Tab.TASKS.name -> TaskScreen(state, actions, listStates.getValue(Tab.TASKS))
-                    else -> Column(Modifier.padding(horizontal = 16.dp)) { SettingsScreen(state, vm, notifications) }
+                    else -> Column(Modifier.padding(horizontal = 16.dp)) {
+                        SettingsScreen(state, vm, notifications, onOpenHabits = { overlay = Overlay.HABITS })
+                    }
                 }
             }
         }
@@ -323,7 +327,10 @@ private fun TodayScreen(
     state: PulsoUiState,
     actions: ScreenActions,
     listState: LazyListState,
+    habits: HabitUiState,
+    habitVm: HabitViewModel,
     onReview: () -> Unit,
+    onOpenHabits: () -> Unit,
     onOpenInbox: () -> Unit,
     onOpenTasks: () -> Unit,
 ) {
@@ -348,6 +355,8 @@ private fun TodayScreen(
                 "${state.inbox.size} ${if (state.inbox.size == 1) "anotação espera" else "anotações esperam"} na entrada",
                 "Organize quando tiver um tempinho.", "Ver", onOpenInbox, Modifier.animateItem())
         }
+        habitTodaySection(habits, today, zone,
+            onCheck = { habit, checked -> habitVm.setChecked(habit, today, checked) }, onManage = onOpenHabits)
         item(key = "h-due") { SectionHeading("Vencidas e para hoje (${due.size})") }
         if (state.loaded && due.isEmpty()) item(key = "e-due") { EmptyMessage("Nada vence hoje. Respire.") }
         items(due, key = { it.id }) {
@@ -571,4 +580,12 @@ private fun TaskScreen(state: PulsoUiState, actions: ScreenActions, listState: L
             TaskCard(task, { done -> actions.toggleTask(task, done) }, { actions.openTask(task) }, Modifier.animateItem())
         }
     }
+}
+
+/** Shows a one-shot message; runs the undo action only when the user taps it. */
+private suspend fun showUiMessage(snackbar: SnackbarHostState, message: UiMessage) {
+    val result = snackbar.showSnackbar(message.text, actionLabel = message.undoLabel,
+        withDismissAction = message.undoLabel == null,
+        duration = if (message.undo != null) SnackbarDuration.Long else SnackbarDuration.Short)
+    if (result == SnackbarResult.ActionPerformed) message.undo?.invoke()
 }
