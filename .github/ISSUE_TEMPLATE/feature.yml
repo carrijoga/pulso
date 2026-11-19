@@ -1,0 +1,28 @@
+name: Feature
+about: Feature pequena e verificável
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema do usuário
+      description: Descreva qual situação concreta precisa melhorar.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critérios de aceitação
+      description: Cenários observáveis (dado/quando/então).
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Riscos e superfícies afetadas
+      description: Room, widget, notificações, backup, segurança, offline, migração.
+  - type: textarea
+    id: tests
+    attributes:
+      label: Como validar
+      description: Testes automatizados e passos manuais no celular.

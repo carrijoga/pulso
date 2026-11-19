@@ -1,0 +1,55 @@
+# Roadmap do Pulso
+
+Legenda: `[x]` implementado no código e coberto por teste automatizado ou verificação no emulador; `[~]` parcial; `[ ]` planejado. "Validado no Moto G84" só depois de teste real no aparelho.
+
+## M0 — Base técnica (v0.1.0)
+
+- [x] Compose e navegação básica; Room, repository, DataStore.
+- [x] Caixa de Entrada/captura rápida e conversão transacional em Task.
+- [x] Tarefas: editar/concluir/arquivar entrada/exclusão lógica, filtro e busca.
+- [x] Widget Glance e callbacks; WorkManager aproximado.
+- [x] Backup export/import e workflow CI; AGENTS.md e specs.
+- [x] Build + lint + testes unitários executados localmente (Windows, JBR 21) em 2026-11-19.
+- [~] CI: workflow alinhado ao compileSdk 37 e com job de testes instrumentados, **ainda não executado** (repositório sem remoto/commits).
+- [ ] Teste em Moto G84 e correções de ergonomia.
+- [x] Testes instrumentados de Room, migração e backup (12 testes, emulador API 37). Widget ainda sem teste automatizado.
+- [~] Acessibilidade: rótulos de checkbox/ações, alvos de 48dp no widget; falta revisão com TalkBack e fonte grande.
+- [x] Notificações reagendadas após importação (coberto por teste de backup).
+- [x] Ícone do app, splash, atalho "Capturar", prévia do widget e ícone de notificação ligados ao manifesto.
+- [x] Confirmação antes de excluir tarefa e "Desfazer" para exclusão/arquivamento.
+
+## M1 — MVP utilizável diariamente
+
+- [x] Criação de tarefa sem passar pela Inbox ("Nova tarefa" na aba Tarefas).
+- [x] Busca global por tarefas (título, observações, categoria, links) e Inbox pendente/arquivada, sem acento/maiúsculas.
+- [x] Campo de links e categorias personalizáveis estruturadas (lista gerenciável; renomear propaga para tarefas).
+- [x] Horário do prazo configurável por tarefa e horário padrão nos Ajustes; adiar lembrete ("Adiar 1h"/"Amanhã" na notificação); estados de permissão claros.
+- [x] Revisão semanal guiada com histórico de reagendamento.
+- [x] Widget pequeno/médio/grande (SizeMode.Responsive). Falta teste em launcher real.
+- [~] Melhorias de acessibilidade, UX e confiabilidade (ver lacunas em `docs/TESTING.md`).
+- [x] Redesenho visual "Brasa & Tinta" (telas, editor em bottom sheet, captura, widget, ícones), verificado no emulador; falta Moto G84/TalkBack.
+
+## M1.5 — Rotinas
+
+- [ ] Hábitos e tarefas recorrentes; calendário semanal; captura por voz.
+- [ ] Importação/exportação versionada (v2 já aceita v1) e testes de migração mais abrangentes.
+- [ ] Busca e organização por compras, estudos, manutenção, casamento, encomendas.
+
+## M2 — Sincronização em nuvem
+
+- [ ] Definir modelo de conta, autenticação, migração de usuário local.
+- [ ] API ASP.NET Core + PostgreSQL (proposta; nenhuma decisão de hospedagem tomada).
+- [ ] Outbox local persistente, checkpoints, idempotência, conflitos e tombstones.
+- [ ] Sync incremental transparente, sem bloquear uso offline.
+- [ ] Testes com dois dispositivos, relógios divergentes, perdas de rede e deletes.
+
+## M2.5 — Organização assistida por IA
+
+- [ ] Propor classificação e extração de data/prioridade sem ação automática.
+- [ ] Opt-in de envio, transparência do provedor, orçamento e privacidade.
+- [ ] Revisão humana antes de persistir sugestões.
+- [ ] Alternativa sem IA sempre disponível.
+
+## M3 — Acesso pelo PC
+
+- [ ] Dashboard web/desktop consumindo a mesma API; manter Android offline-first.

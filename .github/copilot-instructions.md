@@ -1,0 +1,1 @@
+Read `AGENTS.md`, `MEMORY.md` and the relevant `docs/specs/*.md` first. These are canonical. Follow offline-first constraints; do not invent sync or AI integrations. Run build/test/lint and report what actually ran.
