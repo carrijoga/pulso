@@ -93,9 +93,85 @@ interface RescheduleDao {
     suspend fun importUnseen(items: List<RescheduleEntity>)
 }
 
+@Dao
+interface SeriesDao {
+    @Query("SELECT * FROM task_series WHERE deletedAt IS NULL")
+    fun observeActive(): Flow<List<SeriesEntity>>
+
+    @Query("SELECT * FROM task_series WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): SeriesEntity?
+
+    @Query("SELECT * FROM task_series")
+    suspend fun allForBackup(): List<SeriesEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: SeriesEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun importUnseen(items: List<SeriesEntity>)
+}
+
+@Dao
+interface HabitDao {
+    @Query("SELECT * FROM habits WHERE deletedAt IS NULL ORDER BY position, createdAt")
+    fun observeActive(): Flow<List<HabitEntity>>
+
+    @Query("SELECT * FROM habits WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): HabitEntity?
+
+    @Query("SELECT * FROM habits")
+    suspend fun allForBackup(): List<HabitEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: HabitEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun importUnseen(items: List<HabitEntity>)
+}
+
+@Dao
+interface HabitCheckinDao {
+    @Query("SELECT * FROM habit_checkins WHERE deletedAt IS NULL")
+    fun observeActive(): Flow<List<HabitCheckinEntity>>
+
+    @Query("SELECT * FROM habit_checkins WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): HabitCheckinEntity?
+
+    @Query("SELECT * FROM habit_checkins")
+    suspend fun allForBackup(): List<HabitCheckinEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: HabitCheckinEntity)
+
+    /** IGNORE also skips a duplicate (habitId, date) under another UUID: the local row wins. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun importUnseen(items: List<HabitCheckinEntity>)
+}
+
+@Dao
+interface ChecklistDao {
+    @Query("SELECT * FROM checklist_items WHERE taskId = :taskId AND deletedAt IS NULL ORDER BY position")
+    fun observeForTask(taskId: String): Flow<List<ChecklistItemEntity>>
+
+    @Query("SELECT * FROM checklist_items WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): ChecklistItemEntity?
+
+    @Query("SELECT * FROM checklist_items")
+    suspend fun allForBackup(): List<ChecklistItemEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: ChecklistItemEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun importUnseen(items: List<ChecklistItemEntity>)
+}
+
 @Database(
-    entities = [InboxEntity::class, TaskEntity::class, CategoryEntity::class, RescheduleEntity::class],
-    version = 2,
+    entities = [
+        InboxEntity::class, TaskEntity::class, CategoryEntity::class, RescheduleEntity::class,
+        SeriesEntity::class, HabitEntity::class, HabitCheckinEntity::class, ChecklistItemEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
 abstract class PulsoDatabase : RoomDatabase() {
@@ -103,9 +179,13 @@ abstract class PulsoDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun categoryDao(): CategoryDao
     abstract fun rescheduleDao(): RescheduleDao
+    abstract fun seriesDao(): SeriesDao
+    abstract fun habitDao(): HabitDao
+    abstract fun habitCheckinDao(): HabitCheckinDao
+    abstract fun checklistDao(): ChecklistDao
 
     companion object {
-        val ALL_MIGRATIONS: Array<Migration> = arrayOf(Migration1To2)
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(Migration1To2, Migration2To3)
     }
 }
 
@@ -128,6 +208,32 @@ object Migration1To2 : Migration(1, 2) {
             while (cursor.moveToNext()) used += cursor.getString(0)
         }
         seedCategories(db, CategoryRules.DEFAULTS + used)
+    }
+}
+
+/** v2 -> v3: recurrence series, habits, check-ins and checklist. Purely additive (SPEC 012). */
+object Migration2To3 : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE task_items ADD COLUMN seriesId TEXT")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_task_items_seriesId ON task_items (seriesId)")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS task_series (id TEXT NOT NULL, frequency TEXT NOT NULL,
+            repeatInterval INTEGER NOT NULL, daysOfWeek INTEGER NOT NULL, basis TEXT NOT NULL,
+            anchorDueAt INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL,
+            deletedAt INTEGER, PRIMARY KEY(id))""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS habits (id TEXT NOT NULL, name TEXT NOT NULL,
+            notes TEXT NOT NULL DEFAULT '', scheduleType TEXT NOT NULL, daysOfWeek INTEGER NOT NULL DEFAULT 0,
+            timesPerWeek INTEGER NOT NULL DEFAULT 0, reminderMinutes INTEGER, position INTEGER NOT NULL DEFAULT 0,
+            archivedAt INTEGER, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, deletedAt INTEGER,
+            PRIMARY KEY(id))""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS habit_checkins (id TEXT NOT NULL, habitId TEXT NOT NULL,
+            date TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, deletedAt INTEGER,
+            PRIMARY KEY(id))""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_habit_checkins_habitId ON habit_checkins (habitId)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_habit_checkins_habitId_date ON habit_checkins (habitId, date)")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS checklist_items (id TEXT NOT NULL, taskId TEXT NOT NULL,
+            text TEXT NOT NULL, position INTEGER NOT NULL, checkedAt INTEGER, createdAt INTEGER NOT NULL,
+            updatedAt INTEGER NOT NULL, deletedAt INTEGER, PRIMARY KEY(id))""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_checklist_items_taskId ON checklist_items (taskId)")
     }
 }
 

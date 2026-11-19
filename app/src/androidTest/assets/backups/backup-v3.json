@@ -1,0 +1,29 @@
+{
+  "format": "pulso-backup",
+  "version": 3,
+  "exportedAt": 1700200000000,
+  "appVersionName": "0.2.0",
+  "schemaVersion": 3,
+  "inbox": [],
+  "tasks": [
+    {"id": "33333333-0000-4000-8000-0000000000a1", "title": "Regar plantas", "notes": "", "category": "Casa", "priority": "NORMAL", "dueAt": 1700100000000, "completedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null, "links": "", "snoozedUntil": null, "seriesId": "33333333-0000-4000-8000-0000000000b1"},
+    {"id": "33333333-0000-4000-8000-0000000000a2", "title": "Mala de viagem", "notes": "", "category": "Pessoal", "priority": "NORMAL", "dueAt": null, "completedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null, "links": "", "snoozedUntil": null, "seriesId": null}
+  ],
+  "categories": [],
+  "reschedules": [],
+  "series": [
+    {"id": "33333333-0000-4000-8000-0000000000b1", "frequency": "WEEKLY", "repeatInterval": 1, "daysOfWeek": 21, "basis": "SCHEDULE", "anchorDueAt": 1700100000000, "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null}
+  ],
+  "habits": [
+    {"id": "33333333-0000-4000-8000-0000000000e1", "name": "Beber água", "notes": "", "scheduleType": "DAILY", "daysOfWeek": 0, "timesPerWeek": 0, "reminderMinutes": null, "position": 0, "archivedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null},
+    {"id": "33333333-0000-4000-8000-0000000000e2", "name": "Correr", "notes": "", "scheduleType": "TIMES_PER_WEEK", "daysOfWeek": 0, "timesPerWeek": 3, "reminderMinutes": 480, "position": 1, "archivedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null}
+  ],
+  "habitCheckins": [
+    {"id": "33333333-0000-4000-8000-0000000000f1", "habitId": "33333333-0000-4000-8000-0000000000e1", "date": "2023-11-14", "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null},
+    {"id": "33333333-0000-4000-8000-0000000000f2", "habitId": "33333333-0000-4000-8000-0000000000e1", "date": "2023-11-15", "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": 1700000001000}
+  ],
+  "checklistItems": [
+    {"id": "33333333-0000-4000-8000-000000000a01", "taskId": "33333333-0000-4000-8000-0000000000a2", "text": "Passaporte", "position": 0, "checkedAt": 1700000002000, "createdAt": 1700000000000, "updatedAt": 1700000002000, "deletedAt": null},
+    {"id": "33333333-0000-4000-8000-000000000a02", "taskId": "33333333-0000-4000-8000-0000000000a2", "text": "Carregador", "position": 1, "checkedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null}
+  ]
+}

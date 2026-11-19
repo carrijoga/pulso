@@ -17,7 +17,7 @@ Tarefas com título (1 a 200 caracteres), notas, categoria livre, prioridade (`L
 - [x] Notificação no aparelho com permissão 13+ testada (Moto G84, Android 15).
 - [x] Hora do prazo configurável por tarefa; adiamento de lembrete (ver SPEC 007).
 - [x] Revisão semanal (SPEC 007).
-- [ ] Recorrência (M1.5).
+- [ ] Recorrência (M1.5, [SPEC 008](008-tarefas-recorrentes.md)).
 
 ## Nota
 

@@ -28,5 +28,9 @@ class AppContainer(application: Application) {
     val preferences = Preferences(application)
     val changeListener = AndroidTaskChangeListener(application)
     val repository = LocalTaskRepository(database, changeListener = changeListener)
-    val backup = BackupService(database, changeListener)
+    val backup = BackupService(
+        database, changeListener,
+        appVersionName = runCatching { application.packageManager.getPackageInfo(application.packageName, 0).versionName }
+            .getOrNull().orEmpty(),
+    )
 }

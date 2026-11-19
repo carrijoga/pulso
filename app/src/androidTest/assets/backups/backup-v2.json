@@ -1,0 +1,18 @@
+{
+  "format": "pulso-backup",
+  "version": 2,
+  "inbox": [
+    {"id": "22222222-0000-4000-8000-000000000001", "text": "Anotação arquivada", "status": "ARCHIVED", "createdAt": 1700000000000, "updatedAt": 1700000001000, "convertedTaskId": null, "deletedAt": null},
+    {"id": "22222222-0000-4000-8000-000000000002", "text": "Virou tarefa", "status": "CONVERTED", "createdAt": 1700000000000, "updatedAt": 1700000002000, "convertedTaskId": "22222222-0000-4000-8000-0000000000a1", "deletedAt": null}
+  ],
+  "tasks": [
+    {"id": "22222222-0000-4000-8000-0000000000a1", "title": "Comprar pão", "notes": "integral", "category": "Compras", "priority": "HIGH", "dueAt": 1700100000000, "completedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000002000, "deletedAt": null, "links": "https://exemplo.test", "snoozedUntil": 1700103600000},
+    {"id": "22222222-0000-4000-8000-0000000000a2", "title": "Excluída", "notes": "", "category": "Casa", "priority": "LOW", "dueAt": null, "completedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000003000, "deletedAt": 1700000003000, "links": "", "snoozedUntil": null}
+  ],
+  "categories": [
+    {"id": "22222222-0000-4000-8000-0000000000c1", "name": "Café & Açúcar", "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null}
+  ],
+  "reschedules": [
+    {"id": "22222222-0000-4000-8000-0000000000d1", "taskId": "22222222-0000-4000-8000-0000000000a1", "fromDueAt": 1700050000000, "toDueAt": 1700100000000, "changedAt": 1700000002000}
+  ]
+}

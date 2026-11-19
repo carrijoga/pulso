@@ -28,6 +28,10 @@ data class TaskItem(
     val snoozedUntil: Long? = null,
     /** How many times the due date was moved to another date (see [RescheduleEntry]). */
     val rescheduleCount: Int = 0,
+    /** v3: series this task belongs to; null = standalone. */
+    val seriesId: String? = null,
+    /** v3: rule of [seriesId], filled by the repository (SPEC 008). */
+    val recurrence: RecurrenceRule? = null,
 ) {
     val isCompleted: Boolean get() = completedAt != null
 }
@@ -39,6 +43,7 @@ data class TaskDraft(
     val priority: Priority = Priority.NORMAL,
     val dueAt: Long? = null,
     val links: String = "",
+    val recurrence: RecurrenceRule? = null,
 )
 
 data class Category(val id: String, val name: String)

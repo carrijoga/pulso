@@ -31,9 +31,14 @@ Legenda: `[x]` implementado no código e coberto por teste automatizado ou verif
 
 ## M1.5 — Rotinas
 
-- [ ] Hábitos e tarefas recorrentes; calendário semanal; captura por voz.
-- [ ] Importação/exportação versionada (v2 já aceita v1) e testes de migração mais abrangentes.
-- [ ] Busca e organização por compras, estudos, manutenção, casamento, encomendas.
+Plano, pacotes de trabalho e decisões pendentes: [`docs/PLANO-M1.5.md`](PLANO-M1.5.md). Specs 008–013 planejadas; ADRs 0005–0008 aceitas em 2026-11-19.
+
+- [x] Schema v3, backup v3 e testes de migração mais abrangentes (WP0 implementado e validado no emulador; migração real v2→v3 conferida; falta só conferir no Moto G84) — [SPEC 012](specs/012-schema-v3-backup-e-migracoes.md) (WP0, base dos demais).
+- [ ] Tarefas recorrentes — [SPEC 008](specs/008-tarefas-recorrentes.md).
+- [ ] Hábitos — [SPEC 009](specs/009-habitos.md).
+- [ ] Calendário semanal — [SPEC 010](specs/010-calendario-semanal.md).
+- [ ] Captura por voz — [SPEC 011](specs/011-captura-por-voz.md).
+- [ ] Organização por compras, estudos, manutenção, casamento, encomendas (tela por categoria, checklist) — [SPEC 013](specs/013-visoes-por-categoria-e-checklist.md).
 
 ## M2 — Sincronização em nuvem
 

@@ -21,6 +21,13 @@ Use `am instrument` num aparelho/emulador com dados que importam: `connectedDebu
 
 **Status (2026-11-19):** 12 testes passando no emulador API 37 e no Moto G84 5G (Android 15, via `am instrument`) (`LocalTaskRepositoryTest`, `MigrationTest`, `BackupServiceTest`). Também verificado: instalar a v2 sobre um banco v1 real migra sem perda e preserva o tema escolhido.
 
+### WP0 / schema v3 (2026-11-19, emulador API 37, `am instrument`)
+
+- Unitários: 22 passando (inclui `DaysOfWeekMaskTest`). Lint e `assembleDebug` OK (JBR 21).
+- Instrumentados: 22 passando (`BackupServiceTest` 10, `LocalTaskRepositoryTest` 7, `MigrationTest` 5): migração 2→3 com dados de borda, 1→3 encadeada, todas as versões exportadas até a atual com `ALL_MIGRATIONS`, índice único de check-in; backup v3 ida e volta/idempotente, fixtures v1/v2/v3 (`app/src/androidTest/assets/backups/`), versão 4 e referência ausente rejeitadas sem escrever, check-in duplicado ignorado.
+- Migração real: APK v2 (HEAD) instalado, banco populado, APK v3 por cima; `user_version=3`, linhas/tombstone preservados.
+- **NÃO EXECUTADO:** WP0 no Moto G84; exportar backup de um APK v2 real e importar na v3.
+
 ## Manual no Moto G84 5G
 
 1. Instalar APK debug e abrir sem internet. Capturar "Comprar ração"; fechar e reabrir; a anotação deve persistir.
@@ -47,6 +54,7 @@ Use `am instrument` num aparelho/emulador com dados que importam: `connectedDebu
 - [x] Captura rápida pelo `+` do widget salva na Entrada e volta para a tela inicial. Corrigido após o teste: o teclado não abria sozinho (o foco era pedido antes do campo existir dentro do `AnimatedVisibility`).
 - Observação: logo após reinstalar o APK, o primeiro toque no widget pode abrir o app em vez da ação, até o widget ser redesenhado.
 - [x] Widget mais baixo (3x2 no launcher Motorola, ~368x155 dp): a versão com número fixo de linhas por tamanho cortava a segunda tarefa. O launcher informa ao app uma altura menor que a real (113 dp), então calcular linhas pela altura não funciona; a lista virou `LazyColumn` rolável, que ocupa o espaço que sobrar sem cortar linhas fixas. Verificado: rolar, concluir dentro da lista e tocar no título para abrir o app.
+- [x] Instalar o build com banco v3 (M1.5 em andamento) sobre o v2 do aparelho migrou sem perda (7 tarefas, 3 reagendamentos).
 - [x] Widget estreito (2 colunas, ~245 dp): contagem + `+`; `+` abre a captura com teclado; tocar na contagem abre o app. Ajuste após o teste: o card inteiro abre o app (antes só o número, alvo pequeno); conferido no aparelho (toque no canto do card abre o app, `+` segue abrindo a captura).
 - [x] Atalho "Capturar" do ícone (confirmado pelo usuário).
 - [~] TalkBack (auditoria da árvore de acessibilidade via `uiautomator` com TalkBack ativo; navegação por gestos e anúncios falados não verificados): Hoje, Entrada, Tarefas, Ajustes, busca, editor, captura e widget. Corrigido: botão flutuante "Capturar"/"Nova tarefa" sem rótulo (o texto interno do `ExtendedFloatingActionButton` não chega à acessibilidade); interruptor "Cores do papel de parede" sem rótulo (linha inteira agora é `toggleable`); botão de horário anunciado só como "09:00"; chip "Nova" → "Nova categoria"; captura tinha dois "botões" do tamanho da tela (fundo e painel) — trocados por `pointerInput`; cabeçalho do widget com alvo de 34 dp → linha inteira de 48 dp; título da tarefa no widget com alvo de 16 dp → linha inteira de 48 dp abre o app (círculo segue concluindo). Reauditado no aparelho: nenhum elemento sem rótulo nem alvo menor que 48 dp nas telas auditadas.

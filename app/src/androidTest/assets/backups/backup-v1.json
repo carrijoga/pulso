@@ -1,0 +1,10 @@
+{
+  "format": "pulso-backup",
+  "version": 1,
+  "inbox": [
+    {"id": "11111111-0000-4000-8000-000000000001", "text": "Ideia de exemplo", "status": "INBOX", "createdAt": 1700000000000, "updatedAt": 1700000000000, "convertedTaskId": null, "deletedAt": null}
+  ],
+  "tasks": [
+    {"id": "11111111-0000-4000-8000-0000000000a1", "title": "Tarefa antiga", "notes": "", "category": "Pessoal", "priority": "NORMAL", "dueAt": null, "completedAt": null, "createdAt": 1700000000000, "updatedAt": 1700000000000, "deletedAt": null}
+  ]
+}

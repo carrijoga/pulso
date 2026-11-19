@@ -12,11 +12,11 @@
 
 ## Implementação presente no código
 
-- Room **v2** (`Migration1To2` aditiva): `InboxEntity`, `TaskEntity` (+`links`, `snoozedUntil`), `CategoryEntity`, `RescheduleEntity`. UUID, timestamps, tombstones. Schemas v1/v2 em `app/schemas`.
+- Room **v3** (`Migration1To2`, `Migration2To3` aditivas): `InboxEntity`, `TaskEntity` (+`links`, `snoozedUntil`, `seriesId`), `CategoryEntity`, `RescheduleEntity`, e (WP0, só persistência, sem regras/UI) `SeriesEntity`, `HabitEntity`, `HabitCheckinEntity`, `ChecklistItemEntity` com DAOs básicos. Schemas v1–v3 em `app/schemas`; v3 congelado após merge (mudança = v4).
 - Separação `domain/data/ui/widget/reminders`; repository e DI manual (`AppContainer`).
 - Compose: Hoje, Entrada, Tarefas, Ajustes + sobreposições Buscar e Revisão semanal; captura rápida translúcida (`CaptureActivity`).
 - M1 implementado (SPEC 007): nova tarefa direta, links, categorias gerenciáveis, prazo com hora, adiar lembrete, estados de permissão, busca global, revisão semanal com histórico de reagendamento, widget responsivo.
-- Backup JSON v2 (lê v1), aditivo e validado antes de escrever.
+- Backup JSON v3 (lê v1 e v2), aditivo, valida enums/limites/referências antes de escrever; rejeita versão mais nova com mensagem própria.
 - Identidade visual "Brasa & Tinta" aplicada (ver `docs/DESIGN.md`): tema/motion em `ui/theme/Theme.kt`, componentes em `ui/components/Components.kt`, editor em bottom sheet, widget ordenado por `TaskRules.agenda`. Regra: mudanças visuais em `ui/` não alteram domain/data/reminders nem a API do ViewModel.
 
 ## Estado de validação
@@ -26,7 +26,9 @@
 - **Migração real:** APK v2 instalado sobre banco v1 do emulador sem perda.
 - **Após o redesenho (2026-11-19):** build/lint/15 unitários e 12 instrumentados passando de novo; tela Hoje conferida por screenshot.
 - **CI:** workflow atualizado (SDK 37, job de emulador), **NÃO EXECUTADO** (sem remoto/commits; repositório git está na pasta pai `dev/`).
-- **Moto G84 (2026-11-19, Android 15): PARCIAL.** 12 instrumentados OK; telas, permissão (negada → concedida) e lembretes com ações Concluir/Adiar 1h/Amanhã validados (ver `docs/TESTING.md`). Widget (estreito, baixo, grande) e captura pelo widget validados. Widget usa lista rolável (`LazyColumn`): o launcher Motorola informa altura menor que a real, então não calcular linhas por altura. Atalho do ícone OK. TalkBack: árvore auditada e corrigida (rótulo no próprio FAB — o texto do ExtendedFAB não aparece para acessibilidade; nada de `clickable` decorativo em fundos/painéis). Fonte 200% OK em todas as telas e no widget. Não testado: navegação TalkBack por gestos. ATENÇÃO: o Pulso no G84 já tem dados reais do usuário — antes de instalar, comparar o identityHash do schema com `room_master_table` do aparelho e fazer backup via run-as; nunca tocar em tarefas reais nos testes. Glance: dados do widget vêm de `collectAsState` dentro do `provideContent` (ler só antes deixava o widget desatualizado após ações). Para inspecionar o banco no aparelho: `run-as dev.pulso.app cat databases/pulso.db*` (não há `sqlite3` no aparelho).
+- **Moto G84 (2026-11-19, Android 15): PARCIAL.** 12 instrumentados OK; telas, permissão (negada → concedida) e lembretes com ações Concluir/Adiar 1h/Amanhã validados (ver `docs/TESTING.md`). Widget (estreito, baixo, grande) e captura pelo widget validados. Build com banco v3 do M1.5 instalado no G84 em 13:27: migração v2→v3 real sem perda (7 tarefas, 3 reagendamentos). Widget usa lista rolável (`LazyColumn`): o launcher Motorola informa altura menor que a real, então não calcular linhas por altura. Atalho do ícone OK. TalkBack: árvore auditada e corrigida (rótulo no próprio FAB — o texto do ExtendedFAB não aparece para acessibilidade; nada de `clickable` decorativo em fundos/painéis). Fonte 200% OK em todas as telas e no widget. Não testado: navegação TalkBack por gestos. ATENÇÃO: o Pulso no G84 já tem dados reais do usuário — antes de instalar, comparar o identityHash do schema com `room_master_table` do aparelho e fazer backup via run-as; nunca tocar em tarefas reais nos testes. Glance: dados do widget vêm de `collectAsState` dentro do `provideContent` (ler só antes deixava o widget desatualizado após ações). Para inspecionar o banco no aparelho: `run-as dev.pulso.app cat databases/pulso.db*` (não há `sqlite3` no aparelho).
+
+- **WP0 do M1.5 (2026-11-19):** unitários 22 e instrumentados 22 passando no emulador API 37; migração real v2→v3 conferida (APK v2 → v3 sobre o mesmo banco). NÃO EXECUTADO no Moto G84; sem commit.
 
 ## Pendências com maior prioridade
 
@@ -34,7 +36,7 @@
 2. Publicar o repositório e rodar o CI.
 3. TalkBack/fonte grande nas telas redesenhadas.
 4. Decidir nome final.
-5. M1.5: recorrência, calendário semanal, voz.
+5. M1.5: documentação base pronta (`docs/PLANO-M1.5.md`, SPECs 008–013, ADRs 0005–0008 aceitas em 2026-11-19); WP0 (SPEC 012) implementado; WP1+ não. Decisões confirmadas: checklist no M1.5, hábitos como entidade separada, aba "Semana", voz pelo reconhecedor do sistema com aviso de privacidade, lembretes de hábito como P2. Próximo passo: WP1 (recorrência, SPEC 008) e WP2 (hábitos, SPEC 009) sobre o schema v3.
 
 ## Não decidir sem solicitar
 

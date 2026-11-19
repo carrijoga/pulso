@@ -1,6 +1,9 @@
 package dev.pulso.app.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertNull
 import dev.pulso.app.domain.TaskDraft
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -83,6 +86,110 @@ class BackupServiceTest {
         }
         assertTrue(target.inboxDao().allForBackup().isEmpty())
         assertTrue(target.taskDao().allForBackup().isEmpty())
+    }
+
+    private fun fixture(name: String): String = InstrumentationRegistry.getInstrumentation().context
+        .assets.open("backups/$name").bufferedReader(Charsets.UTF_8).use { it.readText() }
+
+    private fun now() = 1_700_000_000_000L
+    private fun seed(db: PulsoDatabase) = runBlocking {
+        db.seriesDao().upsert(SeriesEntity("s1", "WEEKLY", 2, 21, "SCHEDULE", now(), now(), now()))
+        db.taskDao().upsert(TaskEntity("t1", "Recorrente", "", "Casa", "NORMAL", now(), null, now(), now(), seriesId = "s1"))
+        db.habitDao().upsert(HabitEntity("h1", "Meditar", scheduleType = "DAYS_OF_WEEK", daysOfWeek = 5, createdAt = now(), updatedAt = now()))
+        db.habitCheckinDao().upsert(HabitCheckinEntity("c1", "h1", "2026-01-05", now(), now()))
+        db.habitCheckinDao().upsert(HabitCheckinEntity("c2", "h1", "2026-01-06", now(), now(), deletedAt = now()))
+        db.checklistDao().upsert(ChecklistItemEntity("k1", "t1", "Item", 0, now(), now(), now()))
+    }
+
+    @Test fun v3RoundTripCarriesSeriesHabitsCheckinsAndChecklistAndIsIdempotent() = runTest {
+        seed(source)
+        val json = BackupService(source, RecordingListener(), appVersionName = "9.9").exportJson()
+        val header = JSONObject(json)
+        assertEquals(3, header.getInt("version")); assertEquals(3, header.getInt("schemaVersion"))
+        assertEquals("9.9", header.getString("appVersionName")); assertTrue(header.has("exportedAt"))
+
+        val importer = BackupService(target, RecordingListener())
+        val first = importer.importJson(json)
+        assertEquals(1, first.habits); assertEquals(1, first.series); assertEquals(2, first.checkins); assertEquals(1, first.checklistItems)
+        assertEquals("s1", target.taskDao().findById("t1")!!.seriesId)
+        assertEquals(5, target.habitDao().findById("h1")!!.daysOfWeek)
+        assertEquals(2, target.habitCheckinDao().allForBackup().size) // tombstone kept
+        assertEquals("Item", target.checklistDao().findById("k1")!!.text)
+        val second = importer.importJson(json)
+        assertEquals(0, second.tasks + second.habits + second.series + second.checkins + second.checklistItems)
+        assertEquals(2, target.habitCheckinDao().allForBackup().size)
+    }
+
+    @Test fun importsFixturesV1V2AndV3IntoAV3Database() = runTest {
+        val importer = BackupService(target, RecordingListener())
+        assertEquals(1, importer.importJson(fixture("backup-v1.json")).tasks)
+        val v2 = importer.importJson(fixture("backup-v2.json"))
+        assertEquals(2, v2.tasks); assertEquals(2, v2.inbox); assertEquals(1, v2.categories)
+        assertNull(target.taskDao().findById("22222222-0000-4000-8000-0000000000a1")!!.seriesId)
+        val v3 = importer.importJson(fixture("backup-v3.json"))
+        assertEquals(2, v3.tasks); assertEquals(2, v3.habits); assertEquals(1, v3.series)
+        assertEquals(2, v3.checkins); assertEquals(2, v3.checklistItems)
+        assertEquals(5, target.taskDao().allForBackup().size)
+    }
+
+    @Test fun versionNewerThanSupportedIsRejectedWithSpecificMessageAndWritesNothing() = runTest {
+        val raw = JSONObject(fixture("backup-v3.json")).put("version", 4).toString()
+        val failure = runCatching { BackupService(target, RecordingListener()).importJson(raw) }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure!!.message!!.contains("versão mais nova"))
+        assertTrue(target.taskDao().allForBackup().isEmpty() && target.habitDao().allForBackup().isEmpty())
+    }
+
+    @Test fun missingReferencesAreRejectedWithoutWriting() = runTest {
+        val base = JSONObject(fixture("backup-v3.json"))
+        val cases = listOf(
+            JSONObject(base.toString()).also { it.getJSONArray("series").remove(0) },
+            JSONObject(base.toString()).also { it.getJSONArray("habits").remove(0) },
+            JSONObject(base.toString()).also { it.getJSONArray("checklistItems").getJSONObject(0).put("taskId", "nao-existe") },
+        )
+        cases.forEach { json ->
+            val failure = runCatching { BackupService(target, RecordingListener()).importJson(json.toString()) }.exceptionOrNull()
+            assertTrue(failure is IllegalArgumentException)
+            assertTrue(failure!!.message!!.contains("referência ausente"))
+        }
+        assertTrue(target.taskDao().allForBackup().isEmpty())
+        assertTrue(target.seriesDao().allForBackup().isEmpty())
+        assertTrue(target.habitDao().allForBackup().isEmpty())
+        assertTrue(target.habitCheckinDao().allForBackup().isEmpty())
+        assertTrue(target.checklistDao().allForBackup().isEmpty())
+    }
+
+    @Test fun invalidV3FieldsAreRejected() = runTest {
+        fun mutate(path: String, edit: (JSONObject) -> Unit): String {
+            val json = JSONObject(fixture("backup-v3.json")); edit(json.getJSONArray(path).getJSONObject(0)); return json.toString()
+        }
+        val cases = listOf(
+            mutate("series") { it.put("frequency", "HOURLY") },
+            mutate("series") { it.put("repeatInterval", 100) },
+            mutate("series") { it.put("daysOfWeek", 0) }, // WEEKLY needs a weekday
+            mutate("series") { it.put("daysOfWeek", 128) },
+            mutate("habits") { it.put("scheduleType", "TIMES_PER_WEEK").put("timesPerWeek", 8) },
+            mutate("habits") { it.put("name", "x".repeat(61)) },
+            mutate("habitCheckins") { it.put("date", "14/11/2023") },
+            mutate("checklistItems") { it.put("text", "x".repeat(201)) },
+        )
+        cases.forEach { raw ->
+            assertTrue("should reject: $raw", runCatching { BackupService(target, RecordingListener()).importJson(raw) }.exceptionOrNull() is IllegalArgumentException)
+        }
+        assertTrue(target.habitDao().allForBackup().isEmpty() && target.seriesDao().allForBackup().isEmpty())
+    }
+
+    @Test fun duplicateCheckinForSameHabitAndDayWithDifferentUuidKeepsLocalRow() = runTest {
+        target.habitDao().upsert(HabitEntity("h1", "Meditar", scheduleType = "DAILY", createdAt = 1, updatedAt = 1))
+        target.habitCheckinDao().upsert(HabitCheckinEntity("local", "h1", "2026-01-05", 1, 1))
+        val json = JSONObject(fixture("backup-v3.json"))
+        json.getJSONArray("habits").getJSONObject(0).put("id", "h1")
+        json.getJSONArray("habitCheckins").getJSONObject(0).put("habitId", "h1").put("date", "2026-01-05").put("id", "remote")
+        json.getJSONArray("habitCheckins").remove(1)
+        val summary = BackupService(target, RecordingListener()).importJson(json.toString())
+        assertEquals(0, summary.checkins)
+        val rows = target.habitCheckinDao().allForBackup()
+        assertEquals(1, rows.size); assertEquals("local", rows.single().id)
     }
 
     @Test fun importsThousandTasks() = runTest {
