@@ -1,6 +1,6 @@
 # SPEC 011 — Captura por voz (M1.5, WP4)
 
-**Status:** Planejado. Independente do schema v3. ADR: [0007](../adr/0007-voz-pelo-reconhecedor-do-sistema.md).
+**Status:** Implementado (WP4), validação parcial — ver `docs/TESTING.md`. Independente do schema v3. ADR: [0007](../adr/0007-voz-pelo-reconhecedor-do-sistema.md).
 
 ## Objetivo
 
@@ -25,7 +25,7 @@ Capturar uma anotação falando, com o mesmo princípio da captura rápida: sem 
 1. **`CaptureActivity`:** ícone de microfone no campo. Resultado é inserido no campo (anexado ao texto existente com espaço) e o foco volta ao campo; o usuário revisa e toca "Salvar".
 2. **Campo de captura da Entrada/Hoje:** mesmo ícone, mesmo comportamento.
 3. **Atalho do launcher "Capturar por voz"** (novo `shortcut` em `res/xml/shortcuts.xml`): abre `CaptureActivity` com extra `dev.pulso.app.extra.START_VOICE = true`, que dispara o reconhecedor ao abrir. Se indisponível, abre a captura normal.
-4. **Widget (opcional, P2):** botão de microfone no cabeçalho médio/grande abrindo o mesmo intent do atalho. Só se couber sem quebrar o tamanho pequeno.
+4. **Widget (opcional, P2) — pendente, não implementado:** botão de microfone no cabeçalho médio/grande abrindo o mesmo intent do atalho. Só se couber sem quebrar o tamanho pequeno.
 
 ## Regras
 
@@ -42,13 +42,13 @@ Capturar uma anotação falando, com o mesmo princípio da captura rápida: sem 
 
 ## Aceites
 
-- [ ] Botão aparece só com reconhecedor disponível (testar emulador sem Google app e aparelho com).
-- [ ] Texto reconhecido entra no campo, não é salvo sem toque em "Salvar".
-- [ ] Atalho "Capturar por voz" inicia o reconhecedor; fallback para captura digitada.
-- [ ] Manifesto sem `RECORD_AUDIO` e sem `INTERNET` (verificar `aapt dump permissions` ou merged manifest).
-- [ ] Aviso de privacidade exibido uma vez e presente em Ajustes.
+- [x] Botão aparece só com reconhecedor disponível (emulador com e sem o handler; aparelho real não testado).
+- [~] (lógica de anexar testada; fala real NÃO EXECUTADA) Texto reconhecido entra no campo, não é salvo sem toque em "Salvar".
+- [~] (NÃO EXECUTADO no launcher; implementado) Atalho "Capturar por voz" inicia o reconhecedor; fallback para captura digitada.
+- [x] Manifesto sem `RECORD_AUDIO` e sem `INTERNET` (verificar `aapt dump permissions` ou merged manifest).
+- [~] Aviso de privacidade exibido no 1º toque (visto no emulador) e presente em Ajustes (código; tela não conferida); "uma vez só" depende da flag, não conferida na tela.
 - [ ] Manual no Moto G84: pt-BR, offline (modo avião) — documentar o que o reconhecedor do aparelho faz offline.
-- [ ] TalkBack: botão "Ditar anotação".
+- [~] (contentDescription definido; leitor NÃO testado) TalkBack: botão "Ditar anotação".
 
 ## Fora de escopo
 

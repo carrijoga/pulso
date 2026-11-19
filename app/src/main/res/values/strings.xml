@@ -14,4 +14,6 @@
     <string name="widget_loading">Carregando…</string>
     <string name="capture_shortcut_short">Capturar</string>
     <string name="capture_shortcut_long">Capturar anotação</string>
+    <string name="voice_shortcut_short">Por voz</string>
+    <string name="voice_shortcut_long">Capturar por voz</string>
 </resources>

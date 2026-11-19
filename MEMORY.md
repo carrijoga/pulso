@@ -32,6 +32,8 @@
 - **WP2a do M1.5 (2026-11-19):** `domain/HabitRules.kt` (regras puras da SPEC 009; `dueToday` recebe `zone` extra, helpers `createdOn`/`weekStart`) + `HabitRulesTest` (28 testes); `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` passando, **76 testes unitários** no total. Sem instrumentados; sem commit. WP2 (repositório/UI) não iniciado.
 - **WP0 do M1.5 (2026-11-19):** unitários 22 e instrumentados 22 passando no emulador API 37; migração real v2→v3 conferida (APK v2 → v3 sobre o mesmo banco). NÃO EXECUTADO no Moto G84; sem commit.
 
+- **WP4 do M1.5 (2026-11-19):** captura por voz (SPEC 011) implementada: `ui/VoiceCapture.kt`, `<queries>` no manifesto (sem `RECORD_AUDIO`/`INTERNET`, conferido no merged manifest), botão "Ditar anotação" na `CaptureActivity` e no campo da Entrada (só com reconhecedor), atalho "Por voz" (`EXTRA_START_VOICE`), flag `voiceNoticeShown` no DataStore, seção Privacidade em Ajustes. Build/lint/80 unitários passando; emulador conferido parcialmente (ver `docs/TESTING.md`); fala real, atalho e Moto G84 NÃO testados; botão no widget pendente (P2). Sem commit.
+
 ## Pendências com maior prioridade
 
 1. Moto G84: só falta navegação TalkBack por gestos (ouvir os anúncios).

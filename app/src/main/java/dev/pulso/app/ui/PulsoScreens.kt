@@ -451,6 +451,11 @@ private fun InboxScreen(items: List<InboxItem>, vm: PulsoViewModel, actions: Scr
             if (failure == null) { text = ""; error = null } else error = failure.message
         }
     }
+    val settings = vm.state.collectAsStateWithLifecycle().value.settings
+    val voice = rememberVoiceCapture(settings.voiceNoticeShown, vm::voiceNoticeShown,
+        onText = { heard -> text = appendDictation(text, heard); error = null },
+        onError = { error = it })
+    VoiceNoticeDialog(voice)
     val now = System.currentTimeMillis()
     LazyColumn(state = listState, contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item(key = "title") { ScreenTitle("Caixa de entrada", "Sem pressão para organizar agora.") }
@@ -464,6 +469,7 @@ private fun InboxScreen(items: List<InboxItem>, vm: PulsoViewModel, actions: Scr
                             focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
+                    VoiceCaptureButton(voice, enabled = !busy)
                     AnimatedVisibility(text.isNotBlank(), enter = scaleIn(PulsoMotion.bouncy()) + fadeIn(), exit = scaleOut() + fadeOut()) {
                         FilledIconButton(onClick = ::submit, enabled = !busy) {
                             Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Salvar na entrada")

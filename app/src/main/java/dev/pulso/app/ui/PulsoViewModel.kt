@@ -93,6 +93,7 @@ class PulsoViewModel(
     fun dynamicColor(enabled: Boolean) = execute { preferences.setDynamicColor(enabled) }
     fun defaultDueTime(time: LocalTime) = execute { preferences.setDefaultDueTime(time) }
     fun notificationPromptShown() = execute { preferences.markNotificationPromptShown() }
+    fun voiceNoticeShown() = execute { preferences.markVoiceNoticeShown() }
     fun markReviewDone() = execute {
         preferences.markReviewDone(System.currentTimeMillis())
         _messages.tryEmit(UiMessage("Revisão semanal concluída. Até a próxima!"))

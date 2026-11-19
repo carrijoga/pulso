@@ -60,6 +60,15 @@ Use `am instrument` num aparelho/emulador com dados que importam: `connectedDebu
 - [~] TalkBack (auditoria da árvore de acessibilidade via `uiautomator` com TalkBack ativo; navegação por gestos e anúncios falados não verificados): Hoje, Entrada, Tarefas, Ajustes, busca, editor, captura e widget. Corrigido: botão flutuante "Capturar"/"Nova tarefa" sem rótulo (o texto interno do `ExtendedFloatingActionButton` não chega à acessibilidade); interruptor "Cores do papel de parede" sem rótulo (linha inteira agora é `toggleable`); botão de horário anunciado só como "09:00"; chip "Nova" → "Nova categoria"; captura tinha dois "botões" do tamanho da tela (fundo e painel) — trocados por `pointerInput`; cabeçalho do widget com alvo de 34 dp → linha inteira de 48 dp; título da tarefa no widget com alvo de 16 dp → linha inteira de 48 dp abre o app (círculo segue concluindo). Reauditado no aparelho: nenhum elemento sem rótulo nem alvo menor que 48 dp nas telas auditadas.
 - [x] Fonte grande (200%, máximo do Android 15): Hoje, Entrada, Tarefas, Ajustes, editor, captura e widget sem cortes nem sobreposição; títulos quebram linha, filtros rolam na horizontal, lista tem espaço livre sob o botão flutuante, widget usa reticências no título. Observação: os três botões de tema em Ajustes ficam no limite da largura.
 
+## Captura por voz (SPEC 011 / WP4) — 2026-11-19
+
+- [x] Unitários: `VoiceCaptureTest` (anexar ditado ao campo, limite de 500); 80 testes no total passando com build e lint.
+- [x] Merged manifest do debug: sem `RECORD_AUDIO` e sem `INTERNET` (só `POST_NOTIFICATIONS` do app; `ACCESS_NETWORK_STATE`/`WAKE_LOCK`/`RECEIVE_BOOT_COMPLETED`/`FOREGROUND_SERVICE` vêm do WorkManager); `<queries>` de `RECOGNIZE_SPEECH` presente.
+- [x] Emulador API 37 com um handler de `RECOGNIZE_SPEECH` (o app de TTS do Google): microfone aparece na captura rápida; 1º toque mostra o aviso (Continuar/Cancelar); Continuar abre o reconhecedor; voltar (cancelar) não mostra mensagem nem altera o campo.
+- [x] Mesmo emulador com esse pacote desabilitado: o microfone some da captura.
+- NÃO EXECUTADO: fluxo "fala → texto no campo → Salvar" (o emulador não tem reconhecedor real; só a lógica de anexar é coberta por teste unitário); atalho "Capturar por voz" (a `CaptureActivity` não é exportada, então `am start` é negado e o atalho do launcher não foi acionado); 2ª abertura sem aviso após Continuar (flag no DataStore não conferida na tela); campo da Entrada, Ajustes → Privacidade e TalkBack por tela/leitor.
+- NÃO TESTADO: Moto G84 (pt-BR, modo avião) — documentar o comportamento offline do reconhecedor do aparelho.
+
 ## Lacunas conhecidas
 
 - Widget sem teste automatizado; estreito, grande e baixo (lista rolável) verificados no Moto G84.

@@ -28,6 +28,8 @@ data class AppSettings(
     val lastReviewAt: Long? = null,
     /** Whether the Android 13+ notification prompt was already shown once (needed to tell "blocked" apart). */
     val notificationPromptShown: Boolean = false,
+    /** Whether the one-time voice privacy notice (SPEC 011) was already confirmed. */
+    val voiceNoticeShown: Boolean = false,
 )
 
 class Preferences(private val context: Context) {
@@ -37,13 +39,19 @@ class Preferences(private val context: Context) {
     private val dueMinuteKey = intPreferencesKey("default_due_minute_of_day")
     private val lastReviewKey = longPreferencesKey("last_review_at")
     private val promptShownKey = booleanPreferencesKey("notification_prompt_shown")
+    private val voiceNoticeKey = booleanPreferencesKey("voice_notice_shown")
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         val mode = prefs[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
             // Users of v0.1 chose a boolean; keep their choice instead of resetting it.
             ?: when (prefs[legacyDarkThemeKey]) { true -> ThemeMode.DARK; false -> ThemeMode.LIGHT; null -> ThemeMode.SYSTEM }
         val minute = (prefs[dueMinuteKey] ?: (9 * 60)).coerceIn(0, 24 * 60 - 1)
-        AppSettings(AppearanceSettings(mode, prefs[dynamicColorKey] ?: false), LocalTime.of(minute / 60, minute % 60), prefs[lastReviewKey], prefs[promptShownKey] ?: false)
+        AppSettings(AppearanceSettings(mode, prefs[dynamicColorKey] ?: false), LocalTime.of(minute / 60, minute % 60), prefs[lastReviewKey],
+            prefs[promptShownKey] ?: false, prefs[voiceNoticeKey] ?: false)
+    }
+
+    suspend fun markVoiceNoticeShown() {
+        context.dataStore.edit { it[voiceNoticeKey] = true }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

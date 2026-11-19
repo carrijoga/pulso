@@ -11,4 +11,17 @@
             android:targetClass="dev.pulso.app.CaptureActivity"
             android:targetPackage="dev.pulso.app" />
     </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_voice"
+        android:shortcutId="capture_voice"
+        android:shortcutLongLabel="@string/voice_shortcut_long"
+        android:shortcutShortLabel="@string/voice_shortcut_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="dev.pulso.app.CaptureActivity"
+            android:targetPackage="dev.pulso.app">
+            <extra android:name="dev.pulso.app.extra.START_VOICE" android:value="true" />
+        </intent>
+    </shortcut>
 </shortcuts>

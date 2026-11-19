@@ -28,6 +28,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material3.AlertDialog
@@ -154,6 +155,11 @@ fun SettingsScreen(state: PulsoUiState, vm: PulsoViewModel, notifications: Notif
         }
 
         SettingsSection("Categorias", Icons.AutoMirrored.Rounded.Label) { CategoryManager(state.categories, vm) }
+
+        SettingsSection("Privacidade", Icons.Rounded.Lock) {
+            Text("Ditar anotação: $VOICE_PRIVACY_NOTICE",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
 
         SettingsSection("Backup", Icons.Rounded.Backup) {
             Button(onClick = { save.launch("pulso-backup-v3-${java.time.LocalDate.now()}.json") }, modifier = Modifier.fillMaxWidth()) {

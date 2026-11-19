@@ -61,6 +61,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.pulso.app.ui.PulsoViewModel
 import dev.pulso.app.ui.PulsoViewModelFactory
+import dev.pulso.app.ui.EXTRA_START_VOICE
+import dev.pulso.app.ui.VoiceCaptureButton
+import dev.pulso.app.ui.VoiceNoticeDialog
+import dev.pulso.app.ui.appendDictation
+import dev.pulso.app.ui.rememberVoiceCapture
 import dev.pulso.app.ui.theme.PulsoTheme
 import dev.pulso.app.ui.theme.SyncSystemBars
 
@@ -70,23 +75,40 @@ class CaptureActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val factory = PulsoViewModelFactory((application as PulsoApplication).container)
+        val startVoice = // shortcuts.xml extras may arrive as a boolean or as the string "true"
+        intent.getBooleanExtra(EXTRA_START_VOICE, false) || intent.getStringExtra(EXTRA_START_VOICE) == "true"
         setContent {
             val vm: PulsoViewModel = viewModel(factory = factory)
             val state by vm.state.collectAsStateWithLifecycle()
             PulsoTheme(state.settings.appearance) {
                 SyncSystemBars(state.settings.appearance)
-                QuickCapture(onSave = { text, done -> vm.capture(text, done) }, onClose = ::finish) }
+                QuickCapture(onSave = { text, done -> vm.capture(text, done) }, onClose = ::finish,
+                    loaded = state.loaded, voiceNoticeShown = state.settings.voiceNoticeShown,
+                    onVoiceNoticeShown = vm::voiceNoticeShown, startVoice = startVoice) }
         }
     }
 }
 
 @Composable
-private fun QuickCapture(onSave: (String, (Throwable?) -> Unit) -> Unit, onClose: () -> Unit) {
+private fun QuickCapture(
+    onSave: (String, (Throwable?) -> Unit) -> Unit, onClose: () -> Unit,
+    loaded: Boolean, voiceNoticeShown: Boolean, onVoiceNoticeShown: () -> Unit, startVoice: Boolean,
+) {
     var text by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val voice = rememberVoiceCapture(voiceNoticeShown, onVoiceNoticeShown,
+        onText = { heard -> text = appendDictation(text, heard); error = null; focus.requestFocus() },
+        onError = { error = it })
+    // Shortcut "Capturar por voz": open the recognizer once, after settings are loaded (so the notice flag is right).
+    // Without a recognizer this is a no-op and the typed capture is shown as usual.
+    var voiceAutoStarted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(loaded) {
+        if (startVoice && loaded && !voiceAutoStarted) { voiceAutoStarted = true; voice.start() }
+    }
+    VoiceNoticeDialog(voice)
     fun submit() {
         if (text.isBlank() || busy) return
         busy = true
@@ -129,6 +151,7 @@ private fun QuickCapture(onSave: (String, (Throwable?) -> Unit) -> Unit, onClose
                 TextField(text, onValueChange = { if (it.length <= 500) text = it },
                     placeholder = { Text("O que não pode esquecer?") },
                     supportingText = { Text("${text.length}/500") },
+                    trailingIcon = if (voice.available) ({ VoiceCaptureButton(voice, enabled = !busy) }) else null,
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     shape = RoundedCornerShape(20.dp),
                     textStyle = MaterialTheme.typography.bodyLarge,

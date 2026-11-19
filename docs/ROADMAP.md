@@ -37,7 +37,7 @@ Plano, pacotes de trabalho e decisões pendentes: [`docs/PLANO-M1.5.md`](PLANO-M
 - [ ] Tarefas recorrentes — [SPEC 008](specs/008-tarefas-recorrentes.md).
 - [ ] Hábitos — [SPEC 009](specs/009-habitos.md).
 - [ ] Calendário semanal — [SPEC 010](specs/010-calendario-semanal.md).
-- [ ] Captura por voz — [SPEC 011](specs/011-captura-por-voz.md).
+- [~] Captura por voz (WP4 implementado: botão nas capturas, atalho, aviso de privacidade; validado no emulador API 37 sem fala real; falta Moto G84; botão no widget fica pendente, P2) — [SPEC 011](specs/011-captura-por-voz.md).
 - [ ] Organização por compras, estudos, manutenção, casamento, encomendas (tela por categoria, checklist) — [SPEC 013](specs/013-visoes-por-categoria-e-checklist.md).
 
 ## M2 — Sincronização em nuvem

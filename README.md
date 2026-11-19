@@ -73,6 +73,8 @@ CLAUDE.md        # ponteiro para AGENTS.md
 
 Dados locais; não há API remota, analytics nem SDK de IA. O export JSON contém os dados em texto puro e deve ser armazenado em local seguro. O Android Auto Backup está desativado nesta versão para evitar prometer sincronização automática que não foi implementada.
 
+**Captura por voz (opcional):** o botão "Ditar anotação" usa o reconhecedor de fala do Android (`RecognizerIntent`); o Pulso não pede `RECORD_AUDIO`, não declara `INTERNET`, não grava áudio e recebe só o texto, que vai ao campo para revisão. Dependendo do provedor do aparelho, o áudio pode ser processado online. O aviso aparece uma vez e fica em Ajustes → Privacidade. Sem reconhecedor no aparelho, o botão não aparece.
+
 ## Referências
 
 - [Arquitetura Android offline-first](https://developer.android.com/topic/architecture/data-layer/offline-first)
