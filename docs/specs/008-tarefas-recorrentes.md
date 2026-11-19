@@ -80,7 +80,7 @@ Todas as escritas acima chamam `taskChanged` para a ocorrência afetada e para a
 
 ## Aceites
 
-- [ ] `RecurrenceRulesTest`: diário/semanal múltiplos dias/intervalo 2/mensal dia 31/anual 29-fev/`COMPLETION`/atraso de vários dias/reagendamento manual/DST/validações inválidas.
+- [x] `RecurrenceRulesTest` (29 testes, WP1a, 2026-11-19): diário/semanal múltiplos dias/intervalo 2/mensal dia 31/anual 29-fev/`COMPLETION`/atraso de vários dias/reagendamento manual/DST/validações inválidas.
 - [ ] Repositório (instrumentado): concluir cria exatamente uma próxima; concluir duas vezes não duplica; desfazer remove a próxima intocada; desfazer preserva próxima editada; encerrar série; excluir só esta; lembrete agendado para a nova (listener fake).
 - [ ] Organizar entrada da Inbox com repetição mantém `INBOX -> CONVERTED` atômico.
 - [ ] Backup v3 ida e volta com séries (coberto pela SPEC 012).
