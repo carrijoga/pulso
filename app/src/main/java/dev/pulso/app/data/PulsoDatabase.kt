@@ -121,6 +121,10 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE deletedAt IS NULL ORDER BY position, createdAt")
     fun observeActive(): Flow<List<HabitEntity>>
 
+    /** Suspend variant for writes inside `withTransaction` (same order as [observeActive]). */
+    @Query("SELECT * FROM habits WHERE deletedAt IS NULL ORDER BY position, createdAt")
+    suspend fun activeInOrder(): List<HabitEntity>
+
     @Query("SELECT * FROM habits WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): HabitEntity?
 

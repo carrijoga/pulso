@@ -34,8 +34,8 @@ Legenda: `[x]` implementado no código e coberto por teste automatizado ou verif
 Plano, pacotes de trabalho e decisões pendentes: [`docs/PLANO-M1.5.md`](PLANO-M1.5.md). Specs 008–013 planejadas; ADRs 0005–0008 aceitas em 2026-11-19.
 
 - [x] Schema v3, backup v3 e testes de migração mais abrangentes (WP0 implementado e validado no emulador; migração real v2→v3 conferida; falta só conferir no Moto G84) — [SPEC 012](specs/012-schema-v3-backup-e-migracoes.md) (WP0, base dos demais).
-- [~] Tarefas recorrentes (WP1a regras puras e WP1 repositório/editor/rótulo/Desfazer implementados; unitários passando; instrumentados executados no emulador API 37 (39/39 na rodada de 2026-11-19), exceto 3 testes da revisão só compilados; falta Moto G84, widget e "Pular esta vez") — [SPEC 008](specs/008-tarefas-recorrentes.md).
-- [ ] Hábitos — [SPEC 009](specs/009-habitos.md).
+- [~] Tarefas recorrentes (WP1a regras puras e WP1 repositório/editor/rótulo/Desfazer implementados; unitários passando; instrumentados executados no emulador API 37 após a revisão, 2026-11-19; falta Moto G84, widget e "Pular esta vez") — [SPEC 008](specs/008-tarefas-recorrentes.md).
+- [~] Hábitos (WP2 implementado: repositório, seção em Hoje, sobreposição "Hábitos" por Hoje e Ajustes; unitários passando; instrumentados executados no emulador API 37 após a revisão, 2026-11-19; telas não conferidas em emulador/Moto G84; lembretes P2 fora) — [SPEC 009](specs/009-habitos.md).
 - [ ] Calendário semanal — [SPEC 010](specs/010-calendario-semanal.md).
 - [~] Captura por voz (WP4 implementado: botão nas capturas, atalho, aviso de privacidade; validado no emulador API 37 sem fala real; falta Moto G84; botão no widget fica pendente, P2) — [SPEC 011](specs/011-captura-por-voz.md).
 - [ ] Organização por compras, estudos, manutenção, casamento, encomendas (tela por categoria, checklist) — [SPEC 013](specs/013-visoes-por-categoria-e-checklist.md).

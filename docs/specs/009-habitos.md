@@ -1,6 +1,6 @@
 # SPEC 009 — Hábitos (M1.5, WP2a + WP2)
 
-**Status:** Planejado. Depende do WP0 (SPEC 012). ADR: [0006](../adr/0006-habitos-separados.md).
+**Status:** Parcial (WP2 implementado e integrado em `main` em 2026-11-19; unitários e instrumentados executados no emulador API 37; falta validar a UI no emulador/Moto G84). Depende do WP0 (SPEC 012). ADR: [0006](../adr/0006-habitos-separados.md).
 
 ## Objetivo
 
@@ -24,7 +24,8 @@ object HabitRules {
     fun validateName(name: String): String
     fun isScheduledOn(habit: Habit, date: LocalDate): Boolean
     /** Hábitos para a seção de Hoje, na ordem de `position`. */
-    fun dueToday(habits: List<Habit>, checkins: List<HabitCheckin>, today: LocalDate): List<HabitToday>
+    /** `zone` converts `createdAt` (instant) to the local creation date; nothing else depends on it. */
+    fun dueToday(habits: List<Habit>, checkins: List<HabitCheckin>, today: LocalDate, zone: ZoneId): List<HabitToday>
     fun weekProgress(habit: Habit, checkins: List<HabitCheckin>, weekStart: LocalDate, createdOn: LocalDate): WeekProgress
     fun currentStreak(habit: Habit, checkins: List<HabitCheckin>, today: LocalDate, createdOn: LocalDate): Int
     fun canCheck(date: LocalDate, today: LocalDate): Boolean
@@ -63,7 +64,8 @@ interface HabitRepository {
     suspend fun deleteHabit(id: String)          // tombstone; check-ins ficam
     suspend fun restoreHabit(id: String)
     suspend fun move(id: String, newPosition: Int)
-    suspend fun setChecked(habitId: String, date: LocalDate, checked: Boolean)
+    suspend fun setChecked(habitId: String, date: LocalDate, checked: Boolean): Boolean  // true só se mudou
+    suspend fun setCheckedToday(habitId: String, checked: Boolean): LocalDate?          // data gravada, ou null
 }
 ```
 
@@ -87,9 +89,23 @@ Se implementado: canal próprio "Lembretes de hábitos"; `reminderMinutes` por h
 ## Aceites
 
 - [x] `HabitRulesTest` (37 testes, passando em 2026-11-19): as três agendas; sequência com dia de hoje pendente; dias não agendados; extra fora da agenda; semana com meta atingida/não; `createdOn`; meta proporcional na semana de criação (3x sexta/sábado, diária quinta, seg/qua/sex quinta, sábado sem dias restantes, semana seguinte com meta cheia, criado no domingo); limite de 7 dias; virada de semana; troca de fuso não muda datas já gravadas.
-- [ ] Repositório (instrumentado): marcar/desmarcar/remarcar reaproveita a linha; marcar duas vezes não duplica; data futura rejeitada; excluir/restaurar hábito preserva check-ins.
-- [ ] Backup v3 com hábitos e check-ins (SPEC 012).
-- [ ] Manual: TalkBack anuncia estado; fonte grande sem corte na seção de Hoje.
+- [x] Repositório (instrumentado): `LocalHabitRepositoryTest` cobre marcar/desmarcar/remarcar na mesma linha, marcar duas vezes sem duplicar, data futura e além de 7 dias rejeitadas, excluir/restaurar preservando check-ins, arquivado não marcável, movimentação e edição. **EXECUTADO no emulador API 37 em 2026-11-19** (reportado pelo coordenador: 39/39 instrumentados OK, incluindo estes 12).
+- [x] Dois testes adicionados na revisão (`setCheckedTodayReadsTheClockOnEveryCall`, `setCheckedReportsWhetherAnythingChanged`): **EXECUTADOS** no emulador API 37 em 2026-11-19 (56/56 após merge em `main`).
+- [x] Backup v3 com hábitos e check-ins (SPEC 012): coberto pelo `BackupServiceTest` do WP0, executado no emulador API 37 (parte dos 39/39).
+- [ ] Manual: TalkBack anuncia estado; fonte grande sem corte na seção de Hoje. Não feito (sem emulador/aparelho nesta etapa).
+- [x] Unitários de regras novas: `HabitDraftRulesTest` (10): validação do rascunho por agenda, limites de nome/observações, reordenação (subir, descer, limites, id desconhecido), `createdOn` em fusos com horário de verão (New York, Lisboa). `:app:testDebugUnitTest` passando com 99 testes no total.
+
+### Decisões de implementação (WP2)
+
+- `HabitRepository` (interface) + `LocalHabitRepository`; `now` e `zone` injetados. `setChecked` rejeita datas fora da janela de `canCheck` com `IllegalArgumentException` (mensagem exibida no snackbar). Check-in em hábito arquivado é ignorado ao marcar; desmarcar continua permitido.
+- Ação de Hoje usa `setCheckedToday`, que lê o dia do relógio no momento do clique. Hoje relê a data em `ON_RESUME`, então um app aberto na virada do dia não mostra o dia anterior depois de voltar. Sem resume (app continua em primeiro plano passando da meia-noite), a lista pode ficar com a data antiga até a próxima retomada.
+- `setChecked` devolve `true` só se o estado mudou. A VM mostra "marcado como feito" e o Desfazer apenas nesse caso, para que o Desfazer nunca desfaça uma marcação que o usuário já tinha feito antes.
+- Snackbar: uma mensagem nova substitui a que está na tela (sem fila). Um Desfazer pendente pode ser descartado por uma ação mais recente.
+- `move(id, newPosition)`: `newPosition` é o índice final na lista de hábitos não excluídos, arquivados incluídos. A UI passa o índice do vizinho.
+- Excluir: confirmação no editor e depois "Desfazer" (padrão de tarefas). Check-ins ficam.
+- Hoje: a seção só aparece com hábitos devidos hoje; "Gerenciar" abre a sobreposição. Sequência em `TIMES_PER_WEEK` aparece em semanas ("3 semanas seguidas"), nas demais em dias.
+- Lembretes de hábito (P2) não implementados; o campo `reminderMinutes` não é usado.
+- A aba "Semana" (WP3) não foi tocada.
 
 ## Fora de escopo
 

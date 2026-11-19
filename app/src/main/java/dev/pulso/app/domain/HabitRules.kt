@@ -12,9 +12,19 @@ data class HabitToday(val habit: Habit, val doneToday: Boolean, val progress: We
 
 data class WeekProgress(val done: Int, val target: Int)
 
+/** Input of the habit editor; [HabitRules.validateDraft] normalises it before it is written. */
+data class HabitDraft(
+    val name: String,
+    val notes: String = "",
+    val scheduleType: HabitScheduleType = HabitScheduleType.DAILY,
+    val daysOfWeek: Set<DayOfWeek> = emptySet(),
+    val timesPerWeek: Int = 0,
+)
+
 /** Pure habit rules (SPEC 009 / ADR 0006): no Android, no persistence, never reads the clock. */
 object HabitRules {
     const val MAX_NAME = 60
+    const val MAX_NOTES = 500
     const val MAX_BACKDATE_DAYS = 7L
 
     /** Safety net so a corrupt `createdOn` can never spin forever. */
@@ -25,6 +35,38 @@ object HabitRules {
     fun validateName(name: String): String = name.trim().replace(Regex("\\s+"), " ").also {
         require(it.isNotEmpty()) { "Dê um nome ao hábito." }
         require(it.length <= MAX_NAME) { "O hábito deve ter até $MAX_NAME caracteres." }
+    }
+
+    /**
+     * Trims the texts and checks the schedule. Fields that belong to another schedule are cleared,
+     * so a habit never stores days for a DAILY schedule (or a weekly count for DAYS_OF_WEEK).
+     */
+    fun validateDraft(draft: HabitDraft): HabitDraft {
+        val name = validateName(draft.name)
+        val notes = draft.notes.trim()
+        require(notes.length <= MAX_NOTES) { "As observações devem ter até $MAX_NOTES caracteres." }
+        return when (draft.scheduleType) {
+            HabitScheduleType.DAILY -> draft.copy(name = name, notes = notes, daysOfWeek = emptySet(), timesPerWeek = 0)
+            HabitScheduleType.DAYS_OF_WEEK -> {
+                require(draft.daysOfWeek.isNotEmpty()) { "Escolha pelo menos um dia da semana." }
+                draft.copy(name = name, notes = notes, timesPerWeek = 0)
+            }
+            HabitScheduleType.TIMES_PER_WEEK -> {
+                require(draft.timesPerWeek in 1..7) { "Escolha de 1 a 7 vezes por semana." }
+                draft.copy(name = name, notes = notes, daysOfWeek = emptySet())
+            }
+        }
+    }
+
+    /**
+     * Ids in their new order after moving [id] to [newPosition] (clamped to the list), mapped to their
+     * final index. [newPosition] is the index the habit should end up at in [orderedIds].
+     */
+    fun positionsAfterMove(orderedIds: List<String>, id: String, newPosition: Int): Map<String, Int> {
+        if (id !in orderedIds) return orderedIds.withIndex().associate { it.value to it.index }
+        val rest = orderedIds.filter { it != id }.toMutableList()
+        rest.add(newPosition.coerceIn(0, rest.size), id)
+        return rest.withIndex().associate { it.value to it.index }
     }
 
     fun isScheduledOn(habit: Habit, date: LocalDate): Boolean = when (habit.scheduleType) {
@@ -146,6 +188,17 @@ object HabitRules {
             }
             .toList()
     }
+
+    /**
+     * Streak line for Hoje. TIMES_PER_WEEK counts weeks (feminine: "seguidas"); the other schedules
+     * count days (masculine: "seguidos").
+     */
+    fun streakText(habit: Habit, streak: Int): String =
+        if (habit.scheduleType == HabitScheduleType.TIMES_PER_WEEK) {
+            if (streak == 1) "1 semana seguida" else "$streak semanas seguidas"
+        } else {
+            if (streak == 1) "1 dia seguido" else "$streak dias seguidos"
+        }
 
     fun describe(habit: Habit): String = when (habit.scheduleType) {
         HabitScheduleType.DAILY -> "Todo dia"

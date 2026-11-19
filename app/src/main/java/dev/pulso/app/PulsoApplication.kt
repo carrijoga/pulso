@@ -2,6 +2,8 @@ package dev.pulso.app
 
 import android.app.Application
 import androidx.room.Room
+import dev.pulso.app.data.HabitRepository
+import dev.pulso.app.data.LocalHabitRepository
 import dev.pulso.app.data.LocalTaskRepository
 import dev.pulso.app.data.Preferences
 import dev.pulso.app.data.PulsoDatabase
@@ -28,6 +30,7 @@ class AppContainer(application: Application) {
     val preferences = Preferences(application)
     val changeListener = AndroidTaskChangeListener(application)
     val repository = LocalTaskRepository(database, changeListener = changeListener)
+    val habits: HabitRepository = LocalHabitRepository(database)
     val backup = BackupService(
         database, changeListener,
         appVersionName = runCatching { application.packageManager.getPackageInfo(application.packageName, 0).versionName }

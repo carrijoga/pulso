@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -70,7 +71,12 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun SettingsScreen(state: PulsoUiState, vm: PulsoViewModel, notifications: NotificationPermissionState) {
+fun SettingsScreen(
+    state: PulsoUiState,
+    vm: PulsoViewModel,
+    notifications: NotificationPermissionState,
+    onOpenHabits: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var feedback by remember { mutableStateOf<String?>(null) }
@@ -155,6 +161,12 @@ fun SettingsScreen(state: PulsoUiState, vm: PulsoViewModel, notifications: Notif
         }
 
         SettingsSection("Categorias", Icons.AutoMirrored.Rounded.Label) { CategoryManager(state.categories, vm) }
+
+        SettingsSection("Hábitos", Icons.Rounded.Repeat) {
+            Text("Rotinas que se marcam com um toque por dia. Ficam fora da lista de tarefas.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = onOpenHabits, modifier = Modifier.fillMaxWidth()) { Text("Gerenciar hábitos") }
+        }
 
         SettingsSection("Privacidade", Icons.Rounded.Lock) {
             Text("Ditar anotação: $VOICE_PRIVACY_NOTICE",
