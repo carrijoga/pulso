@@ -44,15 +44,38 @@ object HabitRules {
     fun canCheck(date: LocalDate, today: LocalDate): Boolean =
         !date.isAfter(today) && ChronoUnit.DAYS.between(date, today) <= MAX_BACKDATE_DAYS
 
-    fun weekProgress(habit: Habit, checkins: List<HabitCheckin>, weekStart: LocalDate): WeekProgress {
+    /** Progress of the week starting at [weekStart]. Check-ins before [createdOn] do not count. */
+    fun weekProgress(habit: Habit, checkins: List<HabitCheckin>, weekStart: LocalDate, createdOn: LocalDate): WeekProgress {
         val end = weekStart.plusDays(6)
-        val dates = checkins.asSequence().filter { it.habitId == habit.id && it.date in weekStart..end }
+        val dates = checkins.asSequence()
+            .filter { it.habitId == habit.id && it.date in weekStart..end && !it.date.isBefore(createdOn) }
             .map { it.date }.toSet()
+        val done = when (habit.scheduleType) {
+            HabitScheduleType.DAYS_OF_WEEK -> dates.count { it.dayOfWeek in habit.daysOfWeek }
+            HabitScheduleType.DAILY, HabitScheduleType.TIMES_PER_WEEK -> dates.size
+        }
+        return WeekProgress(done, targetFor(habit, weekStart, createdOn))
+    }
+
+    /**
+     * Goal of the week starting at [weekStart]. Only the week that contains [createdOn] is prorated,
+     * counting from the creation day to Sunday; other weeks keep the full goal. A target of 0 means the
+     * week is not part of the goal nor of the streak (DAYS_OF_WEEK with no marked day left).
+     */
+    private fun targetFor(habit: Habit, weekStart: LocalDate, createdOn: LocalDate): Int {
+        val end = weekStart.plusDays(6)
+        if (createdOn !in weekStart..end) {
+            return when (habit.scheduleType) {
+                HabitScheduleType.DAILY -> 7
+                HabitScheduleType.DAYS_OF_WEEK -> habit.daysOfWeek.size
+                HabitScheduleType.TIMES_PER_WEEK -> habit.timesPerWeek
+            }
+        }
+        val daysLeft = ChronoUnit.DAYS.between(createdOn, end).toInt() + 1
         return when (habit.scheduleType) {
-            HabitScheduleType.DAILY -> WeekProgress(dates.size, 7)
-            HabitScheduleType.DAYS_OF_WEEK ->
-                WeekProgress(dates.count { it.dayOfWeek in habit.daysOfWeek }, habit.daysOfWeek.size)
-            HabitScheduleType.TIMES_PER_WEEK -> WeekProgress(dates.size, habit.timesPerWeek)
+            HabitScheduleType.DAILY -> daysLeft
+            HabitScheduleType.DAYS_OF_WEEK -> habit.daysOfWeek.count { it.value >= createdOn.dayOfWeek.value }
+            HabitScheduleType.TIMES_PER_WEEK -> minOf(habit.timesPerWeek, daysLeft)
         }
     }
 
@@ -81,21 +104,21 @@ object HabitRules {
     }
 
     private fun weeklyStreak(habit: Habit, dates: Set<LocalDate>, today: LocalDate, createdOn: LocalDate): Int {
-        val target = habit.timesPerWeek
-        if (target < 1) return 0
-        fun doneIn(start: LocalDate): Int {
+        if (habit.timesPerWeek < 1) return 0
+        fun metIn(start: LocalDate): Boolean {
             val from = maxOf(start, createdOn)
             val to = minOf(start.plusDays(6), today)
-            return dates.count { it in from..to }
+            val target = targetFor(habit, start, createdOn)
+            return target > 0 && dates.count { it in from..to } >= target
         }
         var start = weekStart(today)
         var count = 0
         // The current week counts once it is met, and never breaks the streak while still open.
-        if (doneIn(start) >= target) count++
+        if (metIn(start)) count++
         start = start.minusWeeks(1)
         val floor = today.minusDays(MAX_STREAK_DAYS)
         while (!start.plusDays(6).isBefore(createdOn) && !start.isBefore(floor)) {
-            if (doneIn(start) >= target) count++ else break
+            if (metIn(start)) count++ else break
             start = start.minusWeeks(1)
         }
         return count
@@ -113,12 +136,13 @@ object HabitRules {
             .filter { !it.archived && isScheduledOn(it, today) }
             .sortedBy { it.position }
             .mapNotNull { habit ->
+                val created = createdOn(habit, zone)
                 val doneToday = checkins.any { it.habitId == habit.id && it.date == today }
-                val progress = weekProgress(habit, checkins, weekStart)
+                val progress = weekProgress(habit, checkins, weekStart, created)
                 val visible = habit.scheduleType != HabitScheduleType.TIMES_PER_WEEK ||
                     progress.done < progress.target || doneToday
                 if (!visible) return@mapNotNull null
-                HabitToday(habit, doneToday, progress, currentStreak(habit, checkins, today, createdOn(habit, zone)))
+                HabitToday(habit, doneToday, progress, currentStreak(habit, checkins, today, created))
             }
             .toList()
     }
