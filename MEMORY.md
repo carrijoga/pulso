@@ -49,6 +49,8 @@
 4. Decidir nome final.
 5. M1.5: WP0, WP1, WP2 e WP4 implementados (WP1/WP2 em `main` e na v0.3.0; telas novas no G84 pendentes). Próximo: validar recorrência e hábitos no G84; WP3 (SPEC 010) e WP5 (SPEC 013) em paralelo. Decisões em `docs/PLANO-M1.5.md` §2.
 
+6. Ideias incorporadas em 2026-11-19 (pasta `docs/ideias/` esvaziada): SPEC 014 (widgets configuráveis + anotação rápida; relato de widget cortando/sem rolar contradiz SPEC 003, reproduzir no G84 antes) e SPEC 013 §5 (subtarefas: (a) checklist promovível ou (b) hierarquia com ADR). Aguardam decisão do dono do produto.
+
 ## Não decidir sem solicitar
 
 - Provedor de autenticação, hospedagem, custo de API, política de retenção, envio de dados para IA, compartilhamento entre usuários.

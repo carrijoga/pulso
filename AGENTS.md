@@ -62,7 +62,17 @@
 - [ ] Documentação atualizada sem descrever o futuro como presente.
 - [ ] PR pequeno com riscos, evidências, passos manuais e rollback.
 
-## 6. Solicitações especiais
+## 6. Caixa de ideias (`docs/ideias/`)
+
+Ao iniciar qualquer sessão, verifique `docs/ideias/`. Todo arquivo ali (exceto `README.md`) é uma ideia nova e deve ser processado antes ou junto da tarefa pedida:
+
+1. Ler a ideia e cruzar com specs, ADRs, ROADMAP e código; registrar divergências com evidência (§0.5).
+2. Incorporar no lugar certo: se sobrepõe a uma spec, adicionar seção nela; se é nova, criar `docs/specs/NNN-*.md` com **Status: Planejado**, origem (data/ID da ideia), proposta coerente com as invariantes (§1), decisões pendentes e aceites. Se contraria uma decisão ou "Fora de escopo", só registrar como decisão pendente que exige ADR.
+3. Adicionar item `[ ]` no `docs/ROADMAP.md` (milestone existente ou "Backlog") e uma linha nas pendências do `MEMORY.md`.
+4. Excluir o arquivo da ideia após incorporar. Não implementar código a partir da ideia sem decisão do dono do produto sobre os pontos em aberto.
+5. Informar ao usuário o que foi incorporado, onde, e quais decisões ficaram pendentes.
+
+## 7. Solicitações especiais
 
 - Para implementar uma feature: procure `docs/specs/` e use um issue/PR pequeno.
 - Para propor arquitetura: escreva ADR em `docs/adr/` (contexto, decisão, alternativas, consequências).

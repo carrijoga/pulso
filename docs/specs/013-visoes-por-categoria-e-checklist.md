@@ -44,6 +44,15 @@ Sem integração com transportadoras, lojas ou APIs (o app não tem `INTERNET`).
 - Backup v3 inclui os itens (SPEC 012).
 - Repositório: métodos em `TaskRepository` (`observeChecklist(taskId)`, `addChecklistItem`, `setChecklistItemChecked`, `editChecklistItem`, `deleteChecklistItem`, `moveChecklistItem`) — todos atualizam `task.updatedAt` na mesma transação.
 
+## 5. Subtarefas — decisão pendente
+
+Pedido do usuário (ideia 003, 2026-11-19, ID 2026-11-19-007): "opção de criar subtarefas". Duas leituras:
+
+- **(a) Checklist "promovível":** usa o checklist da §4; um item pode virar tarefa própria (com prazo, lembrete e categoria), mantendo o vínculo com a tarefa de origem. Cabe neste escopo; exige só a regra de conversão (item marcado como convertido, sem apagar, como `INBOX -> CONVERTED`).
+- **(b) Hierarquia de tarefas** (`parentId`): contraria o "Fora de escopo" abaixo, muda o schema (v4) e exige ADR.
+
+Recomendação: entregar primeiro o checklist (§4) e decidir entre (a) e (b) com uso real. Nada é implementado antes da decisão do dono do produto.
+
 ## Aceites
 
 - [ ] `CategoryRules.overview` testado (acentos/maiúsculas, atrasadas, concluídas).

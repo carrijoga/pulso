@@ -40,6 +40,11 @@ Plano, pacotes de trabalho e decisões pendentes: [`docs/PLANO-M1.5.md`](PLANO-M
 - [~] Captura por voz (WP4 implementado: botão nas capturas, atalho, aviso de privacidade; validado no emulador API 37 sem fala real; falta Moto G84; botão no widget fica pendente, P2) — [SPEC 011](specs/011-captura-por-voz.md).
 - [ ] Organização por compras, estudos, manutenção, casamento, encomendas (tela por categoria, checklist) — [SPEC 013](specs/013-visoes-por-categoria-e-checklist.md).
 
+## Backlog — ideias incorporadas (sem milestone)
+
+- [ ] Widgets múltiplos e configuráveis (lista "Somente hoje", quantidade de itens) e widget de anotação rápida para a Entrada; antes, reproduzir o relato de corte/rolagem no Moto G84 — [SPEC 014](specs/014-widgets-configuraveis.md).
+- [ ] Subtarefas: decidir entre checklist promovível a tarefa ou hierarquia (ADR) — [SPEC 013 §5](specs/013-visoes-por-categoria-e-checklist.md).
+
 ## M2 — Sincronização em nuvem
 
 - [ ] Definir modelo de conta, autenticação, migração de usuário local.
