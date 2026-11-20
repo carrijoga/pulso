@@ -36,8 +36,16 @@ data class TaskItem(
     val recurrenceAnchorDueAt: Long? = null,
     /** v3 (SPEC 013): active checklist items in order; filled by the repository. */
     val checklist: List<ChecklistItem> = emptyList(),
+    /** v4 (SPEC 015): mother task when this is a subtask; null = independent. */
+    val parentId: String? = null,
+    /** v4: title of the mother, filled by the repository when the mother is live. */
+    val parentTitle: String? = null,
+    /** v4: live subtasks of this task and how many are completed; filled by the repository. */
+    val subtaskTotal: Int = 0,
+    val subtaskDone: Int = 0,
 ) {
     val isCompleted: Boolean get() = completedAt != null
+    val openSubtasks: Int get() = subtaskTotal - subtaskDone
 }
 
 data class TaskDraft(
@@ -50,6 +58,8 @@ data class TaskDraft(
     val recurrence: RecurrenceRule? = null,
     /** Initial checklist texts. Used only when creating a task; later edits go through the checklist methods. */
     val checklist: List<String> = emptyList(),
+    /** v4 (SPEC 015): mother task, or null for an independent task. */
+    val parentId: String? = null,
 )
 
 data class Category(val id: String, val name: String)

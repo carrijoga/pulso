@@ -28,6 +28,10 @@ Use `am instrument` num aparelho/emulador com dados que importam: `connectedDebu
 - Schema não mudou (v3); migração e backup rodados como regressão.
 - **NÃO EXECUTADO:** Moto G84 (não usado nesta etapa).
 
+### WP6 / subtarefas, schema v4 (2026-11-20) — NÃO EXECUTADO
+
+Executado pelo dono no emulador API 37 em 2026-11-20: **76/78**. `MigrationTest` (incl. 3→4) e `SubtaskRepositoryTest` passaram. As 2 falhas de `BackupServiceTest` eram testes desatualizados (versão 3 esperada no export; versão 4 usada como "mais nova"); corrigidas para 4 e 5, teste renomeado para `v4RoundTrip...`. Reexecução desses 2 testes e do caso de série viva (`liveSubtaskThatStillRepeatsIsRejectedButEndedRepetitionIsKept`) pendente. Moto G84 ainda não testado com v4.
+
 ### WP0 / schema v3 (2026-11-19, emulador API 37, `am instrument`)
 
 - Unitários: 22 passando (inclui `DaysOfWeekMaskTest`). Lint e `assembleDebug` OK (JBR 21).

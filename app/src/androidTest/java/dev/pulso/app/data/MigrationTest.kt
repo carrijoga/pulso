@@ -127,5 +127,47 @@ class MigrationTest {
         assertTrue(failure != null)
     }
 
-    private companion object { const val DB = "migration-test.db" }
+    /** SPEC 015 / ADR 0009: a v3 database with real-looking data keeps every row; subtask link starts null. */
+    @Test fun migrate3To4KeepsRealV3DataAndLeavesParentNull() {
+        helper.createDatabase(DB34, 3).apply {
+            execSQL("INSERT INTO task_series (id, frequency, repeatInterval, daysOfWeek, basis, anchorDueAt, createdAt, updatedAt, deletedAt) " +
+                "VALUES ('s1', 'MONTHLY', 1, 0, 'SCHEDULE', 100, 1, 1, NULL)")
+            execSQL("INSERT INTO task_items (id, title, notes, category, priority, dueAt, completedAt, createdAt, updatedAt, deletedAt, links, snoozedUntil, seriesId) " +
+                "VALUES ('t1', 'Aluguel', 'pagar cedo', 'Casa', 'HIGH', 100, NULL, 1, 2, NULL, 'https://x.test', NULL, 's1')")
+            execSQL("INSERT INTO task_items (id, title, notes, category, priority, dueAt, completedAt, createdAt, updatedAt, deletedAt, links, snoozedUntil, seriesId) " +
+                "VALUES ('t2', 'Velha', '', 'Lixo', 'LOW', NULL, 5, 1, 1, 9, '', 200, NULL)")
+            execSQL("INSERT INTO checklist_items (id, taskId, text, position, checkedAt, createdAt, updatedAt, deletedAt) " +
+                "VALUES ('k1', 't1', 'Pagar', 0, 7, 1, 1, NULL)")
+            execSQL("INSERT INTO habits (id, name, notes, scheduleType, daysOfWeek, timesPerWeek, reminderMinutes, position, archivedAt, createdAt, updatedAt, deletedAt) " +
+                "VALUES ('h1', 'Meditar', '', 'DAILY', 0, 0, NULL, 0, NULL, 1, 1, NULL)")
+            execSQL("INSERT INTO habit_checkins (id, habitId, date, createdAt, updatedAt, deletedAt) VALUES ('c1', 'h1', '2026-01-05', 1, 1, NULL)")
+            close()
+        }
+        // Validates the migrated schema against 4.json (entities, the new column and its index).
+        val db = helper.runMigrationsAndValidate(DB34, 4, true, Migration3To4)
+
+        db.query("SELECT id, title, notes, dueAt, completedAt, deletedAt, links, snoozedUntil, seriesId, parentId FROM task_items ORDER BY id").use { c ->
+            assertEquals(2, c.count)
+            c.moveToFirst()
+            assertEquals("t1", c.getString(0)); assertEquals("Aluguel", c.getString(1)); assertEquals("pagar cedo", c.getString(2))
+            assertEquals(100L, c.getLong(3)); assertTrue(c.isNull(4)); assertTrue(c.isNull(5))
+            assertEquals("https://x.test", c.getString(6)); assertTrue(c.isNull(7))
+            assertEquals("s1", c.getString(8)); assertTrue(c.isNull(9))
+            c.moveToNext()
+            assertEquals("t2", c.getString(0)); assertEquals(9L, c.getLong(5)); assertEquals(200L, c.getLong(7))
+            assertTrue(c.isNull(9))
+        }
+        db.query("SELECT COUNT(*) FROM task_series").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
+        db.query("SELECT text, checkedAt FROM checklist_items WHERE id = 'k1'").use { c ->
+            c.moveToFirst(); assertEquals("Pagar", c.getString(0)); assertEquals(7L, c.getLong(1))
+        }
+        db.query("SELECT COUNT(*) FROM habits").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
+        db.query("SELECT COUNT(*) FROM habit_checkins").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
+        // The new index exists after the migration (SPEC 015 queries filter by parentId).
+        db.query("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'index_task_items_parentId'").use { c ->
+            assertEquals(1, c.count)
+        }
+    }
+
+    private companion object { const val DB = "migration-test.db"; const val DB34 = "migration-3-4.db" }
 }

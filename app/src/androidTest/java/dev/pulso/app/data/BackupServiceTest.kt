@@ -4,6 +4,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
+import dev.pulso.app.domain.SubtaskRules
 import dev.pulso.app.domain.TaskDraft
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -101,11 +103,11 @@ class BackupServiceTest {
         db.checklistDao().upsert(ChecklistItemEntity("k1", "t1", "Item", 0, now(), now(), now()))
     }
 
-    @Test fun v3RoundTripCarriesSeriesHabitsCheckinsAndChecklistAndIsIdempotent() = runTest {
+    @Test fun v4RoundTripCarriesSeriesHabitsCheckinsAndChecklistAndIsIdempotent() = runTest {
         seed(source)
         val json = BackupService(source, RecordingListener(), appVersionName = "9.9").exportJson()
         val header = JSONObject(json)
-        assertEquals(3, header.getInt("version")); assertEquals(3, header.getInt("schemaVersion"))
+        assertEquals(4, header.getInt("version")); assertEquals(4, header.getInt("schemaVersion"))
         assertEquals("9.9", header.getString("appVersionName")); assertTrue(header.has("exportedAt"))
 
         val importer = BackupService(target, RecordingListener())
@@ -130,10 +132,12 @@ class BackupServiceTest {
         assertEquals(2, v3.tasks); assertEquals(2, v3.habits); assertEquals(1, v3.series)
         assertEquals(2, v3.checkins); assertEquals(2, v3.checklistItems)
         assertEquals(5, target.taskDao().allForBackup().size)
+        // v1-v3 files have no parentId: every task imports as independent (SPEC 015).
+        assertTrue(target.taskDao().allForBackup().all { it.parentId == null })
     }
 
     @Test fun versionNewerThanSupportedIsRejectedWithSpecificMessageAndWritesNothing() = runTest {
-        val raw = JSONObject(fixture("backup-v3.json")).put("version", 4).toString()
+        val raw = JSONObject(fixture("backup-v3.json")).put("version", 5).toString()
         val failure = runCatching { BackupService(target, RecordingListener()).importJson(raw) }.exceptionOrNull()
         assertTrue(failure is IllegalArgumentException)
         assertTrue(failure!!.message!!.contains("versão mais nova"))
@@ -190,6 +194,60 @@ class BackupServiceTest {
         assertEquals(0, summary.checkins)
         val rows = target.habitCheckinDao().allForBackup()
         assertEquals(1, rows.size); assertEquals("local", rows.single().id)
+    }
+
+    @Test fun v4RoundTripKeepsParentLinksAndIsIdempotent() = runTest {
+        val repo = LocalTaskRepository(source, { clock.millis }, RecordingListener())
+        repo.createTask(TaskDraft("Casamento"))
+        val mother = repo.observeTasks().first().single().id
+        repo.createTask(TaskDraft("Buffet", parentId = mother))
+        val json = BackupService(source, RecordingListener()).exportJson()
+        assertEquals(4, JSONObject(json).getInt("version"))
+
+        val importer = BackupService(target, RecordingListener())
+        assertEquals(2, importer.importJson(json).tasks)
+        assertEquals(mother, target.taskDao().allForBackup().first { it.title == "Buffet" }.parentId)
+        assertEquals(0, importer.importJson(json).tasks)
+    }
+
+    @Test fun subtaskLinksAreValidatedBeforeAnyWrite() = runTest {
+        fun row(id: String, parent: String?, deleted: Boolean = false) = task(id, "T$id")
+            .put("parentId", parent ?: JSONObject.NULL).apply { if (deleted) put("deletedAt", 5) }
+        fun file(vararg rows: JSONObject) = JSONObject().put("format", "pulso-backup").put("version", 4)
+            .put("inbox", JSONArray()).put("tasks", JSONArray().apply { rows.forEach { put(it) } }).toString()
+        val cases = mapOf(
+            file(row("a", "nao-existe")) to SubtaskRules.MISSING_PARENT,
+            file(row("a", "a")) to SubtaskRules.CYCLE,
+            file(row("a", "b"), row("b", "a")) to SubtaskRules.CYCLE,
+            file(row("m", null), row("s", "m"), row("n", "s")) to SubtaskRules.TWO_LEVELS,
+            file(row("m", null, deleted = true), row("c", "m")) to SubtaskRules.POINTS_TO_DELETED,
+        )
+        cases.forEach { (raw, message) ->
+            val failure = runCatching { BackupService(target, RecordingListener()).importJson(raw) }.exceptionOrNull()
+            assertTrue("should reject: $raw", failure is IllegalArgumentException)
+            assertEquals(message, failure!!.message)
+        }
+        assertTrue(target.taskDao().allForBackup().isEmpty())
+    }
+
+    /** A mother and one subtask; the subtask's series is live or ended depending on [ended]. */
+    private fun repeatingSubtaskFile(ended: Boolean): String {
+        val series = JSONObject().put("id", "s1").put("frequency", "DAILY").put("repeatInterval", 1)
+            .put("daysOfWeek", 0).put("basis", "SCHEDULE").put("anchorDueAt", 1).put("createdAt", 1)
+            .put("updatedAt", 1).put("deletedAt", JSONObject.NULL).apply { if (ended) put("deletedAt", 5) }
+        val child = task("c", "Buffet").put("parentId", "m").put("seriesId", "s1")
+        return JSONObject().put("format", "pulso-backup").put("version", 4).put("inbox", JSONArray())
+            .put("tasks", JSONArray().put(task("m", "Casamento")).put(child))
+            .put("series", JSONArray().put(series)).toString()
+    }
+
+    @Test fun liveSubtaskThatStillRepeatsIsRejectedButEndedRepetitionIsKept() = runTest {
+        val failure = runCatching { BackupService(target, RecordingListener()).importJson(repeatingSubtaskFile(ended = false)) }
+            .exceptionOrNull()
+        assertEquals(SubtaskRules.REPEATING_SUBTASK, failure?.message)
+        assertTrue(target.taskDao().allForBackup().isEmpty())
+        // History of a subtask whose repetition ended is valid (ADR 0009): the whole file imports.
+        assertEquals(2, BackupService(target, RecordingListener()).importJson(repeatingSubtaskFile(ended = true)).tasks)
     }
 
     @Test fun importsThousandTasks() = runTest {

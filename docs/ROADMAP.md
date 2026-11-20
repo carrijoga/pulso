@@ -38,12 +38,13 @@ Plano, pacotes de trabalho e decisões pendentes: [`docs/PLANO-M1.5.md`](PLANO-M
 - [~] Hábitos (WP2 implementado: repositório, seção em Hoje, sobreposição "Hábitos" por Hoje e Ajustes; unitários passando; instrumentados executados no emulador API 37 após a revisão, 2026-11-19; telas não conferidas em emulador/Moto G84; lembretes P2 fora) — [SPEC 009](specs/009-habitos.md).
 - [~] Calendário semanal (WP3 implementado: aba "Semana", projeções de recorrência, linha de hábitos, "Mover para…"; unitários passando, 14 novos; falta validação manual/TalkBack e Moto G84) — [SPEC 010](specs/010-calendario-semanal.md).
 - [~] Captura por voz (WP4 implementado: botão nas capturas, atalho, aviso de privacidade; validado no emulador API 37 sem fala real; falta Moto G84; botão no widget fica pendente, P2) — [SPEC 011](specs/011-captura-por-voz.md).
+- [~] Subtarefas (WP6: hierarquia de um nível, mãe e filhas independentes, cópias na recorrência; schema v4 e backup v4; unitários executados, instrumentados compilados e não executados; falta Moto G84) — [SPEC 015](specs/015-subtarefas.md), [ADR 0009](adr/0009-subtarefas-hierarquia.md).
 - [~] Organização por compras, estudos, manutenção, casamento, encomendas (WP5 implementado: tela por categoria em Ajustes → Categorias, checklist na tarefa, sugestões de categoria; unitários passando, instrumentados compilados e não executados; falta Moto G84 e entrada pelo cartão/editor) — [SPEC 013](specs/013-visoes-por-categoria-e-checklist.md).
 
 ## Backlog — ideias incorporadas (sem milestone)
 
 - [ ] Widgets múltiplos e configuráveis (lista "Somente hoje", quantidade de itens) e widget de anotação rápida para a Entrada; antes, reproduzir o relato de corte/rolagem no Moto G84 — [SPEC 014](specs/014-widgets-configuraveis.md).
-- [ ] Subtarefas: decidir entre checklist promovível a tarefa ou hierarquia (ADR) — [SPEC 013 §5](specs/013-visoes-por-categoria-e-checklist.md).
+- [x] Subtarefas: decidido em 2026-11-20 por hierarquia de um nível (ADR 0009, SPEC 015); implementação no M1.5 (WP6), ver acima.
 
 ## M2 — Sincronização em nuvem
 

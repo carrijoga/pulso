@@ -33,7 +33,7 @@ data class InboxEntity(
     val deletedAt: Long? = null,
 )
 
-@Entity(tableName = "task_items", indices = [Index("seriesId")])
+@Entity(tableName = "task_items", indices = [Index("seriesId"), Index("parentId")])
 data class TaskEntity(
     @PrimaryKey val id: String,
     val title: String,
@@ -51,6 +51,8 @@ data class TaskEntity(
     val snoozedUntil: Long? = null,
     /** v3: owning recurring series; null = standalone task. No FOREIGN KEY (ADR 0008). */
     val seriesId: String? = null,
+    /** v4 (SPEC 015): mother task; null = independent. One level only. No FOREIGN KEY (ADR 0009). */
+    val parentId: String? = null,
 )
 
 /** v2: user-managed category list. Tasks keep the category *name* (text) for backup compatibility. */
@@ -142,7 +144,7 @@ fun InboxEntity.toModel(): InboxItem = InboxItem(
 
 fun TaskEntity.toModel(rescheduleCount: Int = 0): TaskItem = TaskItem(
     id, title, notes, category, Priority.valueOf(priority), dueAt, completedAt, createdAt, updatedAt,
-    links, snoozedUntil, rescheduleCount, seriesId,
+    links, snoozedUntil, rescheduleCount, seriesId, parentId = parentId,
 )
 
 fun TaskWithStats.toModel(): TaskItem = task.toModel(rescheduleCount)

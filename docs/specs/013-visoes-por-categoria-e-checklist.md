@@ -58,14 +58,12 @@ Sem integração com transportadoras, lojas ou APIs (o app não tem `INTERNET`).
 - Backup v3 inclui os itens (SPEC 012).
 - Repositório: métodos em `TaskRepository` (`observeChecklist(taskId)`, `addChecklistItem`, `setChecklistItemChecked`, `editChecklistItem`, `deleteChecklistItem`, `moveChecklistItem`) — todos atualizam `task.updatedAt` na mesma transação.
 
-## 5. Subtarefas — decisão pendente
+## 5. Subtarefas — decidido (2026-11-20)
 
-Pedido do usuário (ideia 003, 2026-11-19, ID 2026-11-19-007): "opção de criar subtarefas". Duas leituras:
+Pedido do usuário (ideia 003, 2026-11-19, ID 2026-11-19-007): "opção de criar subtarefas". O dono do produto escolheu a **opção (b), hierarquia real de tarefas** com `parentId`, limitada a **um nível**, com mãe e filhas independentes. Não é checklist promovível: o checklist (§4) continua para passos pequenos.
 
-- **(a) Checklist "promovível":** usa o checklist da §4; um item pode virar tarefa própria (com prazo, lembrete e categoria), mantendo o vínculo com a tarefa de origem. Cabe neste escopo; exige só a regra de conversão (item marcado como convertido, sem apagar, como `INBOX -> CONVERTED`).
-- **(b) Hierarquia de tarefas** (`parentId`): contraria o "Fora de escopo" abaixo, muda o schema (v4) e exige ADR.
-
-Recomendação: entregar primeiro o checklist (§4) e decidir entre (a) e (b) com uso real. Nada é implementado antes da decisão do dono do produto.
+- Regras, aceites e comportamento: [SPEC 015](015-subtarefas.md). Decisão de arquitetura e alternativas: [ADR 0009](../adr/0009-subtarefas-hierarquia.md) (schema v4, backup v4).
+- Não muda o checklist desta spec: itens continuam sem prazo nem lembrete.
 
 ## Aceites
 
@@ -80,4 +78,4 @@ Evidência: `:app:testDebugUnitTest` (115 testes, 0 falhas) em 2026-11-20, JBR d
 
 ## Fora de escopo
 
-Projetos/subprojetos hierárquicos, tags múltiplas por tarefa, campos específicos por assunto (código de rastreio, orçamento), rastreamento automático de encomendas, compartilhar lista de compras.
+Projetos/subprojetos com mais de um nível (subtarefas têm um nível só, SPEC 015), tags múltiplas por tarefa, campos específicos por assunto (código de rastreio, orçamento), rastreamento automático de encomendas, compartilhar lista de compras.

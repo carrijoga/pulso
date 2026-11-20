@@ -4,11 +4,11 @@
 
 - **UI** (`ui/`): Compose renderiza `PulsoUiState`, ViewModel coordena ações e converte erros para callbacks.
 - **Domínio** (`domain/`): contratos puros `InboxItem`, `TaskItem`, `TaskDraft`, `TaskRules`.
-- **Persistência** (`data/`): Room v3 (migrações explícitas 1→2 e 2→3) e `TaskRepository`, que publica `Flow<List<...>>`. Room é a única fonte de verdade.
+- **Persistência** (`data/`): Room v4 (migrações explícitas 1→2, 2→3 e 3→4) e `TaskRepository`, que publica `Flow<List<...>>`. Room é a única fonte de verdade.
 - **Widget** (`widget/`): consulta `repository.observeTasks().first()` e mostra até três tarefas; usa callback no repositório para concluir.
 - **Lembretes** (`reminders/`): `TaskChangeListener.taskChanged(taskId, reminderAt)` agenda/cancela WorkManager (`reminderAt` = adiamento ou prazo; `null` cancela) e atualiza o widget. O worker reconfere o horário antes de notificar. `ReminderActionReceiver` trata Concluir/Adiar da notificação.
 - **Preferências**: DataStore para tema (Sistema/Claro/Escuro + cores do sistema), horário padrão do prazo, data da última revisão e se o pedido de notificação já foi exibido.
-- **Backup**: `BackupService` (formato v3, lê v1 e v2) valida tudo antes de escrever e importa aditivamente numa única transação Room; sem sobrescrita por UUID.
+- **Backup**: `BackupService` (formato v4, lê v1 a v4) valida tudo antes de escrever e importa aditivamente numa única transação Room; sem sobrescrita por UUID.
 
 ## Fluxos principais
 
