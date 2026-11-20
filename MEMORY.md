@@ -59,6 +59,8 @@
 
 6. Ideias incorporadas em 2026-11-19 (pasta `docs/ideias/` esvaziada): SPEC 014 (widgets configuráveis + anotação rápida; relato de widget cortando/sem rolar contradiz SPEC 003, reproduzir no G84 antes). Subtarefas (SPEC 013 §5) decididas em 2026-11-20: opção (b) hierarquia, 1 nível, mãe e filhas independentes.
 
+7. Ideia 004 incorporada em 2026-11-20 como SPEC 017 (Google Calendar, Planejado). Pendente: escolher leitura (A) ou envio (B) e `CalendarContract` x API; qualquer caminho exige ADR (contraria fora de escopo da SPEC 010).
+
 ## Não decidir sem solicitar
 
 - Provedor de autenticação, hospedagem, custo de API, política de retenção, envio de dados para IA, compartilhamento entre usuários.
