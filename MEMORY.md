@@ -41,13 +41,15 @@
 - **Ajuste de meta na semana de criação de hábitos (2026-11-19):** `HabitRules.weekProgress` recebe `createdOn` e aplica meta proporcional só na semana que contém a criação (SPEC 009, "Semana de criação"); sequência e visibilidade de `TIMES_PER_WEEK` usam a mesma regra. `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` passando, **89 testes unitários** (`HabitRulesTest` 37). Sem instrumentados; sem push.
 - **WP4 do M1.5 (2026-11-19):** captura por voz (SPEC 011) implementada: `ui/VoiceCapture.kt`, `<queries>` no manifesto (sem `RECORD_AUDIO`/`INTERNET`, conferido no merged manifest), botão "Ditar anotação" na `CaptureActivity` e no campo da Entrada (só com reconhecedor), atalho "Por voz" (`EXTRA_START_VOICE`), flag `voiceNoticeShown` no DataStore, seção Privacidade em Ajustes. Build/lint/80 unitários passando; emulador conferido parcialmente (ver `docs/TESTING.md`); fala real, atalho e Moto G84 NÃO testados; botão no widget pendente (P2). Sem commit.
 
+- **WP5 do M1.5 (2026-11-20, branch `m1.5/wp5-categorias`):** `domain/ChecklistRules.kt` (texto 1..200, até 100 itens, `isLastUnchecked`, `placeAt`), `CategoryRules.overview`/`suggestions` (em `OrganizeRules.kt`), busca inclui os itens; `TaskItem.checklist` e `TaskDraft.checklist` (criação); métodos de checklist no `TaskRepository` (cada escrita toca `task.updatedAt` e chama `taskChanged`); `ChecklistDao.observeActive()` (query nova, sem mudança de schema); `ui/CategoryScreen.kt` (sobreposição), `ui/ChecklistEditor.kt` (seção "Itens" no editor), progresso "3/8" no `TaskCard`, sugestões em Ajustes → Categorias. **EXECUTADO (2026-11-20, JBR do Android Studio):** `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:compileDebugAndroidTestKotlin` passando; **115 testes unitários** (9 novos: `ChecklistRulesTest` 6, `CategoryRulesTest` 3), 0 falhas; lint 0 erros (12 avisos, todos já existentes). **Instrumentados: COMPILADOS, NÃO EXECUTADOS** (`ChecklistRepositoryTest`, 5 testes; emulador não usado nesta etapa). **NÃO EXECUTADO:** fluxo de UI em tela, TalkBack, fonte grande, Moto G84. Schema v3 e backup intactos. Sem commit até o fechamento desta etapa.
+
 ## Pendências com maior prioridade
 
 1. Moto G84: só falta navegação TalkBack por gestos (ouvir os anúncios).
 2. ~~Publicar o repositório e rodar o CI.~~ Feito em 2026-11-19 (ver estado de validação).
 3. TalkBack/fonte grande nas telas redesenhadas.
 4. Decidir nome final.
-5. M1.5: WP0, WP1, WP2 e WP4 implementados (WP1/WP2 em `main` e na v0.3.0; telas novas no G84 pendentes). Próximo: validar recorrência e hábitos no G84; WP3 (SPEC 010) e WP5 (SPEC 013) em paralelo. Decisões em `docs/PLANO-M1.5.md` §2.
+5. M1.5: WP0, WP1, WP2, WP4 e WP5 implementados (WP1/WP2 em `main` e na v0.3.0; telas novas no G84 pendentes). Próximo: validar recorrência, hábitos e checklist no G84; executar os instrumentados do WP5 no emulador; WP3 (SPEC 010) em paralelo. Decisões em `docs/PLANO-M1.5.md` §2.
 
 ## Não decidir sem solicitar
 

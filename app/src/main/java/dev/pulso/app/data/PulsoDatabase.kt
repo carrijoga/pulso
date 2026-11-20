@@ -188,6 +188,10 @@ interface ChecklistDao {
     @Query("SELECT * FROM checklist_items WHERE taskId = :taskId AND deletedAt IS NULL ORDER BY position")
     fun observeForTask(taskId: String): Flow<List<ChecklistItemEntity>>
 
+    /** Every active item, grouped by task in the repository: task progress and search (SPEC 013). */
+    @Query("SELECT * FROM checklist_items WHERE deletedAt IS NULL ORDER BY position")
+    fun observeActive(): Flow<List<ChecklistItemEntity>>
+
     /** Active items of a task, used to copy the checklist into the next occurrence (SPEC 008). */
     @Query("SELECT * FROM checklist_items WHERE taskId = :taskId AND deletedAt IS NULL ORDER BY position")
     suspend fun activeForTask(taskId: String): List<ChecklistItemEntity>

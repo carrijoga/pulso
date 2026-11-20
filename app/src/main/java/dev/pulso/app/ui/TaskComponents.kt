@@ -48,6 +48,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Snooze
@@ -68,6 +69,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -85,6 +87,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.pulso.app.domain.Category
+import dev.pulso.app.domain.ChecklistItem
 import dev.pulso.app.domain.DueState
 import dev.pulso.app.domain.Priority
 import dev.pulso.app.domain.RecurrenceRules
@@ -140,6 +143,11 @@ fun TaskCard(task: TaskItem, onToggle: (Boolean) -> Unit, onOpen: () -> Unit, mo
                     task.recurrence?.let { rule ->
                         val anchor = task.recurrenceAnchorDueAt ?: task.dueAt ?: now
                         MetaIcon(Icons.Rounded.Repeat, "Repete: ${RecurrenceRules.describe(rule, anchor, zone)}", null)
+                    }
+                    if (task.checklist.isNotEmpty()) {
+                        val checkedItems = task.checklist.count { it.checked }
+                        MetaIcon(Icons.Rounded.Checklist, "Itens marcados: $checkedItems de ${task.checklist.size}",
+                            "$checkedItems/${task.checklist.size}")
                     }
                     val links = TaskRules.linkList(task.links).size
                     if (links > 0) MetaIcon(Icons.Rounded.Link, "$links links", "$links")
@@ -209,6 +217,9 @@ fun TaskEditorDialog(
     history: Flow<List<RescheduleEntry>> = flowOf(emptyList()),
     onDelete: (() -> Unit)? = null,
     onEndSeries: (() -> Unit)? = null,
+    /** Saved items of [existing] and their writes; a new task uses a draft list instead. */
+    checklist: Flow<List<ChecklistItem>> = flowOf(emptyList()),
+    checklistHandler: ChecklistHandler? = null,
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -225,6 +236,10 @@ fun TaskEditorDialog(
     var error by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     val entries by history.collectAsState(initial = emptyList())
+    val savedItems by checklist.collectAsState(initial = emptyList())
+    val draftLines = rememberSaveable(saver = DraftChecklistSaver) {
+        mutableStateListOf<String>().apply { addAll(initial.checklist) }
+    }
 
     fun pickTime(date: LocalDate, current: LocalTime) {
         TimePickerDialog(context, { _, hour, minute ->
@@ -235,7 +250,7 @@ fun TaskEditorDialog(
     fun save() {
         if (busy || text.isBlank()) return
         busy = true
-        onSave(TaskDraft(text, notes, category, priority, dueAt, links, recurrence)) { failure ->
+        onSave(TaskDraft(text, notes, category, priority, dueAt, links, recurrence, draftLines.toList())) { failure ->
             busy = false
             error = failure?.message
         }
@@ -363,6 +378,14 @@ fun TaskEditorDialog(
                     })
                 existing?.snoozedUntil?.takeIf { !existing.isCompleted && dueAt == existing.dueAt }?.let {
                     Text("Lembrete adiado para ${formatDateTime(it)}.", style = MaterialTheme.typography.bodySmall)
+                }
+                if (existing != null && checklistHandler != null) {
+                    ChecklistSection(savedItems.map { ChecklistRow(it.id, it.text, it.checked) },
+                        checkable = true, handler = checklistHandler)
+                } else {
+                    val draft = remember { DraftChecklist(draftLines) }
+                    ChecklistSection(draftLines.mapIndexed { index, line -> ChecklistRow("$index", line, false) },
+                        checkable = false, handler = draft)
                 }
                 if (entries.isNotEmpty()) RescheduleHistory(entries, zone)
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)

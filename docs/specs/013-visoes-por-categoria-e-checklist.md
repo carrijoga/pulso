@@ -1,6 +1,18 @@
 # SPEC 013 — Visões por categoria e checklist (M1.5, WP5)
 
-**Status:** Planejado. Checklist confirmado no escopo; depende do WP0 (tabela `checklist_items`).
+**Status:** Parcial (WP5 implementado em 2026-11-20; unitários **EXECUTADOS** (115/115 na branch); instrumentados do repositório **compilados, não executados**; Moto G84 pendente). Depende do WP0 (SPEC 012).
+
+### Implementação (WP5)
+
+- Regras puras: `domain/ChecklistRules.kt` (texto 1..200, até 100 itens por tarefa, `isLastUnchecked`, `placeAt` para mover e desfazer exclusão) e `CategoryRules.overview`/`suggestions` em `domain/OrganizeRules.kt`. `SearchRules.matchesTask` também lê os textos dos itens.
+- Dados: sem mudança de schema. `ChecklistDao.observeActive()` é a única query nova; `TaskRepository` ganhou `observeChecklist`, `addChecklistItem`, `setChecklistItemChecked`, `editChecklistItem`, `deleteChecklistItem` (tombstone), `restoreChecklistItem` (Desfazer) e `moveChecklistItem`. Cada escrita toca `task.updatedAt` na mesma transação e chama `taskChanged`. Quando um item não muda de estado, nada é gravado. `observeTasks` preenche `TaskItem.checklist`.
+- UI: `ui/CategoryScreen.kt` (sobreposição, aberta por Ajustes → Categorias; "Nova tarefa" já vem com a categoria); `ui/ChecklistEditor.kt` (seção "Itens" no editor: campo com Concluir/"+" que mantém o foco, checkbox, tocar no texto abre editar/subir/descer/excluir); `TaskCard` mostra "n/m" quando há itens; Ajustes → Categorias ganhou sugestões que não repetem nomes existentes.
+- Criação: itens digitados antes de salvar entram com a tarefa (`TaskDraft.checklist`). Em edição, as mudanças valem na hora pelos métodos de checklist; `editTask` ignora `draft.checklist`.
+- Recorrência: a próxima ocorrência copia o checklist com todos os itens desmarcados (comportamento do WP1, `spawnNextOccurrence`).
+- Decisões: "Concluir tarefa?" sai como mensagem (snackbar) pelo ViewModel, como a spec pede; dentro do editor (folha modal) ela só fica visível depois que a folha fecha. Precisa conferir no aparelho.
+- Limitações: entrada da tela por categoria só por Ajustes → Categorias. Tocar no ponto da categoria no `TaskCard` e no editor **não** foi implementado (o alvo de 48dp dentro do cartão não estava resolvido). A aba Tarefas já tinha chips de categoria com "Todas" (SPEC 007); não foram alterados.
+- Ambiguidade da spec: "a próxima ocorrência copia os itens desmarcados" (§4) pode ser lido como "copia só os desmarcados". O comportamento atual (WP1) copia todos, desmarcados. Mantido; confirmar com o dono do produto.
+- Fora do WP5 (decisão pendente do dono do produto): subtarefas e promover item a tarefa.
 
 ## Objetivo
 
@@ -46,11 +58,13 @@ Sem integração com transportadoras, lojas ou APIs (o app não tem `INTERNET`).
 
 ## Aceites
 
-- [ ] `CategoryRules.overview` testado (acentos/maiúsculas, atrasadas, concluídas).
-- [ ] Filtro por chips combina com filtros existentes.
-- [ ] Sugestões não duplicam nomes existentes (`CategoryRules.validateName`).
-- [ ] Checklist: adicionar/marcar/reordenar/excluir com tombstone; cópia desmarcada na próxima ocorrência; busca encontra item; backup ida e volta.
-- [ ] Manual: lista de compras com 20 itens no Moto G84 com teclado aberto; TalkBack lê "arroz, marcado".
+Evidência: `:app:testDebugUnitTest` (115 testes, 0 falhas) em 2026-11-20, JBR do Android Studio. Instrumentados só compilados.
+
+- [x] `CategoryRules.overview` testado (acentos/maiúsculas, atrasadas, agendadas, sem prazo, concluídas em ordem de conclusão): `CategoryRulesTest`.
+- [~] Filtro por chips combina com filtros existentes: os chips e a combinação já existem na aba Tarefas (SPEC 007, código lido, não coberto por teste de UI). Não verificado em tela.
+- [x] Sugestões não duplicam nomes existentes, sem diferença de acento/maiúscula: `CategoryRulesTest.suggestions`. O cadastro usa o mesmo `CategoryRules.validateName` de antes.
+- [~] Checklist: adicionar/marcar/reordenar/excluir com tombstone, cópia desmarcada na próxima ocorrência, busca e backup. A busca está coberta por `ChecklistRulesTest`. Adicionar/marcar/editar/mover/excluir/desfazer, o limite de 100 itens e a cópia da recorrência estão em `ChecklistRepositoryTest` (5 testes, **compilados, NÃO executados**). O backup ida e volta com itens é coberto pela SPEC 012 (não reexecutado aqui).
+- [ ] Manual: lista de compras com 20 itens no Moto G84 com teclado aberto; TalkBack lê "arroz, marcado". NÃO FEITO.
 
 ## Fora de escopo
 

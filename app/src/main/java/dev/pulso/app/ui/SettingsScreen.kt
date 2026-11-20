@@ -4,9 +4,15 @@ import android.app.TimePickerDialog
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.AssistChip
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.BrightnessAuto
@@ -62,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import dev.pulso.app.domain.Category
+import dev.pulso.app.domain.CategoryRules
 import dev.pulso.app.data.ThemeMode
 import dev.pulso.app.reminders.NotificationAccess
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +84,7 @@ fun SettingsScreen(
     vm: PulsoViewModel,
     notifications: NotificationPermissionState,
     onOpenHabits: () -> Unit,
+    onOpenCategory: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -160,7 +169,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        SettingsSection("Categorias", Icons.AutoMirrored.Rounded.Label) { CategoryManager(state.categories, vm) }
+        SettingsSection("Categorias", Icons.AutoMirrored.Rounded.Label) { CategoryManager(state.categories, vm, onOpenCategory) }
 
         SettingsSection("Hábitos", Icons.Rounded.Repeat) {
             Text("Rotinas que se marcam com um toque por dia. Ficam fora da lista de tarefas.",
@@ -239,7 +248,7 @@ private fun NotificationStatus(notifications: NotificationPermissionState) {
 }
 
 @Composable
-private fun CategoryManager(categories: List<Category>, vm: PulsoViewModel) {
+private fun CategoryManager(categories: List<Category>, vm: PulsoViewModel, onOpen: (String) -> Unit) {
     var newName by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<Category?>(null) }
@@ -247,7 +256,9 @@ private fun CategoryManager(categories: List<Category>, vm: PulsoViewModel) {
     categories.forEachIndexed { index, category ->
         if (index > 0) HorizontalDivider()
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(category.name, Modifier.weight(1f))
+            Box(Modifier.weight(1f).heightIn(min = 48.dp)
+                .clickable(role = Role.Button, onClickLabel = "Abrir ${category.name}") { onOpen(category.name) },
+                contentAlignment = Alignment.CenterStart) { Text(category.name) }
             IconButton(onClick = { renaming = category }) { Icon(Icons.Rounded.Edit, "Renomear ${category.name}") }
             IconButton(onClick = { deleting = category }) { Icon(Icons.Rounded.Delete, "Remover ${category.name}") }
         }
@@ -259,6 +270,17 @@ private fun CategoryManager(categories: List<Category>, vm: PulsoViewModel) {
         Button(enabled = newName.isNotBlank(), onClick = {
             vm.addCategory(newName) { failure -> if (failure == null) { newName = ""; error = null } else error = failure.message }
         }) { Text("Adicionar") }
+    }
+    val suggestions = CategoryRules.suggestions(categories)
+    if (suggestions.isNotEmpty()) {
+        Text("Sugestões", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            suggestions.forEach { name ->
+                AssistChip(onClick = { vm.addCategory(name) { failure -> error = failure?.message } },
+                    label = { Text(name) }, leadingIcon = { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)) },
+                    modifier = Modifier.heightIn(min = 48.dp))
+            }
+        }
     }
     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
 

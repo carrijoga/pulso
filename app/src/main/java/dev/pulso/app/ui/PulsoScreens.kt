@@ -131,11 +131,16 @@ private enum class Tab(val label: String, val selectedIcon: ImageVector, val ico
     TASKS("Tarefas", Icons.Rounded.TaskAlt, Icons.Outlined.TaskAlt),
     SETTINGS("Ajustes", Icons.Rounded.Settings, Icons.Outlined.Settings),
 }
-private enum class Overlay(val title: String) { SEARCH("Buscar"), REVIEW("Revisão semanal"), HABITS("Hábitos") }
+private enum class Overlay(val title: String) {
+    SEARCH("Buscar"), REVIEW("Revisão semanal"), HABITS("Hábitos"),
+    /** Title is the category name (see [PulsoScreens]). */
+    CATEGORY("Categoria"),
+}
 
 /** Which editor sheet is open. Stored as ids so it survives rotation and follows Room updates. */
 private sealed interface Editor {
-    data object NewTask : Editor
+    /** [category] pre-fills the new task when it comes from a category screen. */
+    data class NewTask(val category: String? = null) : Editor
     data class Edit(val taskId: String) : Editor
     data class Organize(val inboxId: String) : Editor
 }
@@ -157,10 +162,12 @@ fun PulsoScreens(vm: PulsoViewModel) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     var overlay by rememberSaveable { mutableStateOf<Overlay?>(null) }
+    var categoryName by rememberSaveable { mutableStateOf<String?>(null) }
     var editorKey by rememberSaveable { mutableStateOf<String?>(null) }
     val editor: Editor? = editorKey?.let { key ->
         when {
-            key == "new" -> Editor.NewTask
+            key == "new" -> Editor.NewTask()
+            key.startsWith("new:") -> Editor.NewTask(key.removePrefix("new:"))
             key.startsWith("edit:") -> Editor.Edit(key.removePrefix("edit:"))
             key.startsWith("organize:") -> Editor.Organize(key.removePrefix("organize:"))
             else -> null
@@ -203,7 +210,8 @@ fun PulsoScreens(vm: PulsoViewModel) {
                 title = {
                     AnimatedContent(overlay, transitionSpec = { fadeIn(tween(PulsoMotion.SHORT)) togetherWith fadeOut(tween(PulsoMotion.SHORT)) },
                         label = "topTitle") { current ->
-                        if (current != null) Text(current.title, style = MaterialTheme.typography.titleLarge)
+                        if (current != null) Text(if (current == Overlay.CATEGORY) categoryName ?: current.title else current.title,
+                            style = MaterialTheme.typography.titleLarge)
                         else Row(verticalAlignment = Alignment.CenterVertically) {
                             PulseMark(size = 30.dp, animate = true)
                             Spacer(Modifier.width(10.dp))
@@ -279,6 +287,9 @@ fun PulsoScreens(vm: PulsoViewModel) {
                             onFinish = { vm.markReviewDone(); overlay = null })
                     }
                     Overlay.HABITS.name -> HabitManagerScreen(habitState, habitVm)
+                    Overlay.CATEGORY.name -> Box(Modifier.padding(horizontal = 16.dp)) {
+                        CategoryScreen(categoryName.orEmpty(), state, actions, onNewTask = { editorKey = "new:$it" })
+                    }
                     Tab.TODAY.name -> TodayScreen(state, actions, listStates.getValue(Tab.TODAY),
                         habits = habitState, habitVm = habitVm,
                         onReview = { overlay = Overlay.REVIEW }, onOpenHabits = { overlay = Overlay.HABITS },
@@ -286,7 +297,8 @@ fun PulsoScreens(vm: PulsoViewModel) {
                     Tab.INBOX.name -> InboxScreen(state.inbox, vm, actions, listStates.getValue(Tab.INBOX))
                     Tab.TASKS.name -> TaskScreen(state, actions, listStates.getValue(Tab.TASKS))
                     else -> Column(Modifier.padding(horizontal = 16.dp)) {
-                        SettingsScreen(state, vm, notifications, onOpenHabits = { overlay = Overlay.HABITS })
+                        SettingsScreen(state, vm, notifications, onOpenHabits = { overlay = Overlay.HABITS },
+                            onOpenCategory = { categoryName = it; overlay = Overlay.CATEGORY })
                     }
                 }
             }
@@ -303,10 +315,14 @@ fun PulsoScreens(vm: PulsoViewModel) {
             history = if (existing != null) remember(existing.id) { vm.rescheduleHistory(existing.id) }
                 else remember { kotlinx.coroutines.flow.flowOf(emptyList()) },
             onDelete = existing?.let { task -> { dismiss(); vm.delete(task.id) } },
-            onEndSeries = existing?.takeIf { it.recurrence != null && !it.isCompleted }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } })
+            onEndSeries = existing?.takeIf { it.recurrence != null && !it.isCompleted }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } },
+            checklist = if (existing != null) remember(existing.id) { vm.checklist(existing.id) }
+                else remember { kotlinx.coroutines.flow.flowOf(emptyList()) },
+            checklistHandler = existing?.let { vm.checklistHandler(it) })
     }
     when (editor) {
-        Editor.NewTask -> common(TaskDraft(title = ""), "Nova tarefa", null) { draft, done ->
+        is Editor.NewTask -> common(TaskDraft(title = "", category = editor.category ?: TaskRules.DEFAULT_CATEGORY),
+            "Nova tarefa", null) { draft, done ->
             vm.create(draft) { failure -> if (failure == null) dismiss(); done(failure) }
         }
         is Editor.Edit -> {

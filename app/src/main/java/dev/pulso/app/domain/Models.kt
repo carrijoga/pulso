@@ -34,6 +34,8 @@ data class TaskItem(
     val recurrence: RecurrenceRule? = null,
     /** v3: first occurrence of [seriesId]; the monthly/yearly label uses its day (not the reschedules). */
     val recurrenceAnchorDueAt: Long? = null,
+    /** v3 (SPEC 013): active checklist items in order; filled by the repository. */
+    val checklist: List<ChecklistItem> = emptyList(),
 ) {
     val isCompleted: Boolean get() = completedAt != null
 }
@@ -46,6 +48,8 @@ data class TaskDraft(
     val dueAt: Long? = null,
     val links: String = "",
     val recurrence: RecurrenceRule? = null,
+    /** Initial checklist texts. Used only when creating a task; later edits go through the checklist methods. */
+    val checklist: List<String> = emptyList(),
 )
 
 data class Category(val id: String, val name: String)

@@ -11,6 +11,8 @@ import dev.pulso.app.data.Preferences
 import dev.pulso.app.data.TaskRepository
 import dev.pulso.app.data.ThemeMode
 import dev.pulso.app.domain.Category
+import dev.pulso.app.domain.ChecklistItem
+import dev.pulso.app.domain.ChecklistRules
 import dev.pulso.app.domain.InboxItem
 import dev.pulso.app.domain.RescheduleEntry
 import dev.pulso.app.domain.TaskDraft
@@ -103,6 +105,26 @@ class PulsoViewModel(
     fun deleteCategory(category: Category) = execute(failureMessage = true) {
         repository.deleteCategory(category.id)
         _messages.tryEmit(UiMessage("Categoria \"${category.name}\" removida da lista. As tarefas mantêm o nome."))
+    }
+
+    fun checklist(taskId: String): Flow<List<ChecklistItem>> = repository.observeChecklist(taskId)
+    fun addChecklistItem(taskId: String, text: String, done: (Throwable?) -> Unit = {}) =
+        execute(done) { repository.addChecklistItem(taskId, text) }
+    fun editChecklistItem(itemId: String, text: String, done: (Throwable?) -> Unit = {}) =
+        execute(done) { repository.editChecklistItem(itemId, text) }
+    fun moveChecklistItem(itemId: String, newIndex: Int) = execute(failureMessage = true) {
+        repository.moveChecklistItem(itemId, newIndex)
+    }
+    /** [task] is the state before the change: checking the last open item suggests completing the task. */
+    fun setChecklistItemChecked(task: TaskItem, itemId: String, checked: Boolean) = execute(failureMessage = true) {
+        repository.setChecklistItemChecked(itemId, checked)
+        if (checked && !task.isCompleted && ChecklistRules.isLastUnchecked(task.checklist, itemId)) {
+            _messages.tryEmit(UiMessage("Todos os itens marcados. Concluir tarefa?", "Concluir") { complete(task.id, true) })
+        }
+    }
+    fun deleteChecklistItem(itemId: String) = execute(failureMessage = true) {
+        repository.deleteChecklistItem(itemId)
+        _messages.tryEmit(UiMessage("Item removido.", "Desfazer") { execute { repository.restoreChecklistItem(itemId) } })
     }
 
     fun themeMode(mode: ThemeMode) = execute { preferences.setThemeMode(mode) }
