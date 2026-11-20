@@ -141,6 +141,8 @@ private enum class Overlay(val title: String) {
     SEARCH("Buscar"), REVIEW("Revisão semanal"), HABITS("Hábitos"),
     /** Title is the category name (see [PulsoScreens]). */
     CATEGORY("Categoria"),
+    SETTINGS_APPEARANCE("Aparência"), SETTINGS_REMINDERS("Lembretes"), SETTINGS_CATEGORIES("Categorias"),
+    SETTINGS_BACKUP("Backup"), SETTINGS_PRIVACY("Privacidade"), SETTINGS_ABOUT("Sobre o Pulso"),
 }
 
 /** Which editor sheet is open. Stored as ids so it survives rotation and follows Room updates. */
@@ -169,6 +171,8 @@ fun PulsoScreens(vm: PulsoViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     var overlay by rememberSaveable { mutableStateOf<Overlay?>(null) }
     var categoryName by rememberSaveable { mutableStateOf<String?>(null) }
+    // Where Voltar goes from the category overlay (the Categorias sub-page); null = back to the tab.
+    var categoryBack by rememberSaveable { mutableStateOf<Overlay?>(null) }
     var editorKey by rememberSaveable { mutableStateOf<String?>(null) }
     // Day in focus on the Semana tab (epoch day); the "+" creates a task on it.
     var weekFocus by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
@@ -200,7 +204,8 @@ fun PulsoScreens(vm: PulsoViewModel) {
         toggleTask = { task, done -> if (done && task.openSubtasks > 0) pendingParent = task.id else vm.complete(task.id, done) },
         organizeInbox = { editorKey = "organize:${it.id}" },
     )
-    BackHandler(enabled = overlay != null) { overlay = null }
+    val goBack = { overlay = if (overlay == Overlay.CATEGORY) categoryBack else null; categoryBack = null }
+    BackHandler(enabled = overlay != null) { goBack() }
     BackHandler(enabled = overlay == null && tab != Tab.TODAY) { tab = Tab.TODAY }
 
     // One list state per tab so scroll position survives switching, and drives the FAB.
@@ -215,7 +220,7 @@ fun PulsoScreens(vm: PulsoViewModel) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                 navigationIcon = {
-                    if (overlay != null) IconButton(onClick = { overlay = null }) {
+                    if (overlay != null) IconButton(onClick = goBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
                     }
                 },
@@ -304,6 +309,13 @@ fun PulsoScreens(vm: PulsoViewModel) {
                     Overlay.CATEGORY.name -> Box(Modifier.padding(horizontal = 16.dp)) {
                         CategoryScreen(categoryName.orEmpty(), state, actions, onNewTask = { editorKey = "newcat:$it" })
                     }
+                    Overlay.SETTINGS_APPEARANCE.name -> AppearanceSettings(state, vm)
+                    Overlay.SETTINGS_REMINDERS.name -> ReminderSettings(state, vm, notifications)
+                    Overlay.SETTINGS_CATEGORIES.name -> CategorySettings(state, vm,
+                        onOpenCategory = { categoryName = it; categoryBack = Overlay.SETTINGS_CATEGORIES; overlay = Overlay.CATEGORY })
+                    Overlay.SETTINGS_BACKUP.name -> BackupSettings(vm)
+                    Overlay.SETTINGS_PRIVACY.name -> PrivacySettings()
+                    Overlay.SETTINGS_ABOUT.name -> AboutSettings()
                     Tab.TODAY.name -> TodayScreen(state, actions, listStates.getValue(Tab.TODAY),
                         habits = habitState, habitVm = habitVm,
                         onReview = { overlay = Overlay.REVIEW }, onOpenHabits = { overlay = Overlay.HABITS },
@@ -314,8 +326,16 @@ fun PulsoScreens(vm: PulsoViewModel) {
                         focusDay = LocalDate.ofEpochDay(weekFocus), onFocusDay = { weekFocus = it.toEpochDay() },
                         onReschedule = vm::reschedule, onOpenTasks = { tab = Tab.TASKS })
                     else -> Column(Modifier.padding(horizontal = 16.dp)) {
-                        SettingsScreen(state, vm, notifications, onOpenHabits = { overlay = Overlay.HABITS },
-                            onOpenCategory = { categoryName = it; overlay = Overlay.CATEGORY })
+                        SettingsScreen(state, notifications, onOpen = { page ->
+                            overlay = when (page) {
+                                SettingsPage.APPEARANCE -> Overlay.SETTINGS_APPEARANCE
+                                SettingsPage.REMINDERS -> Overlay.SETTINGS_REMINDERS
+                                SettingsPage.CATEGORIES -> Overlay.SETTINGS_CATEGORIES
+                                SettingsPage.BACKUP -> Overlay.SETTINGS_BACKUP
+                                SettingsPage.PRIVACY -> Overlay.SETTINGS_PRIVACY
+                                SettingsPage.ABOUT -> Overlay.SETTINGS_ABOUT
+                            }
+                        })
                     }
                 }
             }
