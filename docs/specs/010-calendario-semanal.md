@@ -1,6 +1,28 @@
 # SPEC 010 — Calendário semanal (M1.5, WP3)
 
-**Status:** Planejado. Grade de tarefas pode começar após o WP0; projeções de recorrência dependem do WP1 e a linha de hábitos do WP2.
+**Status:** Parcial (WP3 implementado em 2026-11-20: regras puras, aba, navegação, projeções, hábitos e "Mover para…". Unitários **EXECUTADOS**; manual (TalkBack, fonte grande, tema escuro) e Moto G84 pendentes). Depende de WP1 (SPEC 008) e WP2 (SPEC 009).
+
+## Implementação (WP3)
+
+- Regras puras: `domain/WeekRules.kt` (`weekStart`, `daysOf`, `build`, `seriesOf`, `moveToDay`). Séries vêm das próprias tarefas (`TaskItem.recurrence` e `recurrenceAnchorDueAt`, preenchidos pelo repositório), então não há query nova, nem mudança no `TaskRepository`, nem no schema.
+- Projeções: `RecurrenceRules.occurrencesBetween` a partir da âncora da série, só para datas **depois** da ocorrência aberta (sem duplicar o dia dela e sem projetar o passado). Só para séries com um item aberto; `COMPLETION` não projeta.
+- UI: `ui/WeekScreen.kt` (aba "Semana", 5ª aba, entre Tarefas e Ajustes). `PulsoScreens.kt` ganhou a aba, o dia em foco para o "+" (`weekFocus`, epoch day, salvo com `rememberSaveable`) e `Editor.NewTask(day)` com prazo no horário padrão. Sem mudança em `PulsoViewModel.kt` nem em `TaskComponents.kt`.
+- Hábitos: `HabitViewModel.setChecked(habit, date, checked)` (dia da semana, com "Desfazer"); o repositório continua recusando datas fora de `HabitRules.canCheck`.
+- Escritas: concluir (`toggleTask`), "Hoje"/"Amanhã" em atrasadas e "Mover para…" usam `vm.reschedule` (histórico e lembrete existentes); check-in usa `habitVm.setChecked`. Navegar só troca o dia em foco.
+- Interpretações: "concluídas naquele dia" = concluídas cujo **prazo** é o dia (o prazo é o eixo da visão). "Atrasadas" = abertas com prazo antes de hoje, listadas só na semana atual (inclusive as de semanas anteriores); fora da semana atual, elas aparecem no próprio dia.
+
+## Evidência (2026-11-20)
+
+- `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:compileDebugAndroidTestKotlin`: **BUILD SUCCESSFUL**; **120 testes unitários**, 0 falhas (inclui `WeekRulesTest`, **14** testes, com `America/Sao_Paulo`, `Europe/Lisbon` e `America/New_York`).
+- Instrumentados: não escritos nem executados nesta etapa (sem emulador/adb). "Mover para…" reusa `TaskRepository.reschedule`, coberto por `LocalTaskRepositoryTest` (instrumentado, executado em rodadas anteriores, não reexecutado agora).
+- Não executado: navegação e telas no emulador ou no Moto G84, TalkBack, fonte 200%, tema escuro.
+
+## Limitações conhecidas
+
+- "Hoje" em Atrasadas mantém a hora da tarefa (`TaskRules.rescheduleFromToday`): se essa hora já passou, ela volta a aparecer como atrasada.
+- Projeção exige ocorrência aberta; série sem ocorrência aberta não aparece como previsto.
+- "Pular esta vez", arrastar e soltar, e lembretes de hábito ficam fora. Hábitos `TIMES_PER_WEEK` aparecem em todos os dias (qualquer dia conta).
+- Widget não mostra a semana.
 
 ## Objetivo
 
@@ -54,10 +76,10 @@ Nenhuma tabela nova. O ViewModel precisa expor as séries ativas (WP1) e hábito
 
 ## Aceites
 
-- [ ] `WeekRulesTest`: início da semana em segunda; tarefa às 23:30 e 00:30 no dia local certo; DST; atrasadas só na semana atual; projeções sem duplicar a ocorrência ativa; `COMPLETION` não projeta; hábitos editáveis só até 7 dias.
-- [ ] "Mover para…" registra histórico de reagendamento e mantém a hora.
-- [ ] Navegar semanas não dispara escrita.
-- [ ] Manual: TalkBack lê "segunda-feira, 17 de novembro, 3 tarefas"; fonte grande; tema escuro.
+- [x] `WeekRulesTest` (14 testes, executados em 2026-11-20): início da semana em segunda; 23:30 e 00:30 no dia local certo (SP, em que UTC cairia no dia seguinte); DST de NY (projeção mantém 09:00 local) e lacuna de Lisboa; atrasadas só na semana atual e sem repetir na coluna do dia; projeções sem duplicar a ocorrência ativa e só para dias seguintes; `COMPLETION` não projeta; série encerrada/concluída não projeta; hábitos editáveis só até 7 dias e não no futuro; criação do hábito; arquivados fora.
+- [~] "Mover para…" registra histórico de reagendamento e mantém a hora. Hora: `WeekRulesTest.moveToDayKeepsTheLocalHour` (inclusive através do DST). Histórico: reusa `TaskRepository.reschedule`, coberto por `LocalTaskRepositoryTest` (instrumentado, rodado antes; não reexecutado nesta etapa). Fluxo na tela não executado.
+- [~] Navegar semanas não dispara escrita: por código (a navegação só altera `weekFocus` local; `WeekScreen` não chama repositório). Sem teste automatizado.
+- [ ] Manual: TalkBack lê "segunda-feira, 17 de novembro, 3 tarefas"; fonte grande; tema escuro. Não feito.
 
 ## Fora de escopo
 
