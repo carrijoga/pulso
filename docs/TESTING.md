@@ -6,7 +6,7 @@
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-**Status (2026-11-19):** executados localmente no Windows com JBR 21: 15 testes unitários, lint e APK debug passando. CI configurado, ainda não executado (repositório sem remoto).
+**Status (2026-11-19):** executados localmente no Windows com JBR 21: 15 testes unitários, lint e APK debug passando. CI executado no GitHub Actions em 2026-11-19 (push de `main` 0f4dc0f e tag `v0.3.0`): "Android checks" (`verify` e `instrumented`) e "Release" passaram.
 
 ## Testes instrumentados (emulador)
 

@@ -1,7 +1,7 @@
 # Pulso · Capture agora. Organize depois.
 
-> **Projeto inicial Android (v0.1.0).** Nome e identificador `dev.pulso.app` são provisórios.
-> O código-fonte foi gerado, mas **não houve compilação Android neste ambiente** (sem Android SDK/Gradle instalado). A primeira build deve ser validada em Android Studio/CI antes de instalar o APK.
+> **Prerelease Android v0.3.0.** Nome e identificador `dev.pulso.app` são provisórios.
+> Build, lint e testes são executados localmente e no CI (GitHub Actions); o prerelease 0.3.0 foi publicado pelo workflow Release. Veja [docs/TESTING.md](docs/TESTING.md).
 
 Aplicativo Android nativo em **Kotlin + Jetpack Compose + Material 3**. Prioriza captura em uma **Caixa de Entrada separada das tarefas**, armazenamento local, acesso rápido por widget e evolução segura por agentes de IA. Primeiro dispositivo-alvo: Moto G84 5G.
 
@@ -10,10 +10,11 @@ Aplicativo Android nativo em **Kotlin + Jetpack Compose + Material 3**. Prioriza
 - Caixa de entrada com captura rápida e arquivamento; `CaptureActivity` abre o campo direto.
 - Organização de uma anotação em tarefa (transação Room preserva o histórico da anotação).
 - Criação, edição, conclusão e exclusão lógica de tarefas.
-- Categorias livres, prioridades, descrição, prazo opcional (09h na data selecionada).
+- Categorias livres, prioridades, descrição, prazo opcional com horário configurável.
 - Telas Hoje, Caixa de Entrada, Tarefas (ativas, concluídas, atrasadas + busca) e Ajustes.
 - Room/SQLite offline-first e IDs UUID; timestamps UTC em epoch milliseconds.
-- Widget Glance: até três tarefas, concluir pelo widget, acesso à captura por `+`.
+- Widget Glance nos tamanhos pequeno, médio e grande (lista rolável), concluir pelo widget, acesso à captura por `+`.
+- Tarefas recorrentes (SPEC 008), hábitos (SPEC 009) e captura por voz (SPEC 011) implementados; validação manual no Moto G84 pendente.
 - Lembretes locais aproximados via WorkManager; requer permissão de notificações no Android 13+.
 - Tema claro/escuro armazenado em DataStore; esquema dinâmico Material You.
 - Exportação/importação JSON sem servidor: importação **aditiva**, UUIDs repetidos são ignorados.
@@ -21,11 +22,11 @@ Aplicativo Android nativo em **Kotlin + Jetpack Compose + Material 3**. Prioriza
 
 ## Ainda NÃO está implementado
 
-Sincronização em nuvem, conta/login, app web, IA, compromissos, hábitos, recorrências, anexos, integração com calendário, links como campo próprio, widget em diferentes tamanhos, captura por voz, lembretes com horário configurável/exato, revisão semanal e lembretes de itens restaurados por importação. Veja [roadmap](docs/ROADMAP.md).
+Sincronização em nuvem, conta/login, app web, IA, compromissos, anexos, integração com calendário, calendário semanal (SPEC 010) e lembretes exatos. Veja [roadmap](docs/ROADMAP.md).
 
 ## Preparação (Windows / Android Studio)
 
-1. Instale **JDK 17 ou 21** (ou use o JBR 21 do Android Studio; aponte `JAVA_HOME` para ele se `java` não estiver no PATH), Android SDK Platform **36** e Android SDK Build Tools compatíveis no **Android Studio**.
+1. Instale **JDK 17 ou 21** (ou use o JBR 21 do Android Studio; aponte `JAVA_HOME` para ele se `java` não estiver no PATH), Android SDK Platform **37** e Android SDK Build Tools compatíveis no **Android Studio**.
 2. Extraia o ZIP e, em um PowerShell aberto na raiz, execute `.\gradlew.bat --version` para baixar o jar do wrapper Gradle com checksum validado.
 3. Abra a pasta no Android Studio e aguarde **Sync Project with Gradle Files**. O Gradle 9.6.0 e dependências são baixados na primeira execução.
 4. Em terminal PowerShell na raiz:

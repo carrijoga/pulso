@@ -10,7 +10,7 @@ Legenda: `[x]` implementado no código e coberto por teste automatizado ou verif
 - [x] Widget Glance e callbacks; WorkManager aproximado.
 - [x] Backup export/import e workflow CI; AGENTS.md e specs.
 - [x] Build + lint + testes unitários executados localmente (Windows, JBR 21) em 2026-11-19.
-- [~] CI: workflow alinhado ao compileSdk 37 e com job de testes instrumentados, **ainda não executado** (repositório sem remoto/commits).
+- [x] CI: workflow alinhado ao compileSdk 37 e com job de testes instrumentados; executado no GitHub Actions em 2026-11-19 (push de `main` 0f4dc0f e tag `v0.3.0`): "Android checks" (`verify` e `instrumented`) e "Release" passaram; prerelease "Pulso 0.3.0" publicado com `pulso-v0.3.0.apk` e `.sha256`.
 - [~] Teste em Moto G84: instrumentados, telas, permissão e lembretes com ações validados (2026-11-19); widget grande e captura pelo widget validados (com 2 correções); atalho do ícone OK; TalkBack auditado com 7 correções reconferidas (falta navegação por gestos); fonte grande (200%) OK.
 - [x] Testes instrumentados de Room, migração e backup (12 testes, emulador API 37 e Moto G84). Widget ainda sem teste automatizado.
 - [~] Acessibilidade: rótulos e alvos de 48dp auditados com TalkBack no Moto G84 (7 correções); fonte grande (200%) OK; falta navegação por gestos.

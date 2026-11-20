@@ -1,6 +1,6 @@
 # Plano de implementação — M1.5 Rotinas
 
-**Status:** Planejado · documentação base criada em 2026-11-19. Nenhum item do M1.5 está implementado no código.
+**Status:** WP0, WP1, WP2 e WP4 implementados; WP3 e WP5 planejados (ver [ROADMAP](ROADMAP.md) e `MEMORY.md`). Documentação base criada em 2026-11-19.
 
 Este documento divide o M1.5 do [ROADMAP](ROADMAP.md) em pacotes de trabalho (WP) que agentes diferentes podem executar com pouco conflito. Leia antes o `AGENTS.md` raiz; as regras dele valem para todos os pacotes.
 

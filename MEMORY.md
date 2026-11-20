@@ -1,6 +1,6 @@
 # MEMORY.md — contexto durável do projeto (não memória pessoal)
 
-> Atualizado em 2026-11-19. Use para retomar sessões de IA. **Não é evidência de teste.** Atualize após mudanças concretas.
+> Atualizado em 2026-11-20. Use para retomar sessões de IA. **Não é evidência de teste.** Atualize após mudanças concretas.
 
 ## Visão confirmada
 
@@ -25,8 +25,9 @@
 - **Instrumentados: EXECUTADOS** no emulador API 37 via `am instrument`: 12 testes (repositório, migração 1→2, backup) passando.
 - **Migração real:** APK v2 instalado sobre banco v1 do emulador sem perda.
 - **Após o redesenho (2026-11-19):** build/lint/15 unitários e 12 instrumentados passando de novo; tela Hoje conferida por screenshot.
-- **CI:** workflow atualizado (SDK 37, job de emulador), **NÃO EXECUTADO** (sem remoto/commits; repositório git está na pasta pai `dev/`).
-- **Moto G84 (2026-11-19, Android 15): PARCIAL.** 12 instrumentados OK; telas, permissão (negada → concedida) e lembretes com ações Concluir/Adiar 1h/Amanhã validados (ver `docs/TESTING.md`). Widget (estreito, baixo, grande) e captura pelo widget validados. Build com banco v3 do M1.5 instalado no G84 em 13:27: migração v2→v3 real sem perda (7 tarefas, 3 reagendamentos). Widget usa lista rolável (`LazyColumn`): o launcher Motorola informa altura menor que a real, então não calcular linhas por altura. Atalho do ícone OK. TalkBack: árvore auditada e corrigida (rótulo no próprio FAB — o texto do ExtendedFAB não aparece para acessibilidade; nada de `clickable` decorativo em fundos/painéis). Fonte 200% OK em todas as telas e no widget. Não testado: navegação TalkBack por gestos. ATENÇÃO: o Pulso no G84 já tem dados reais do usuário — antes de instalar, comparar o identityHash do schema com `room_master_table` do aparelho e fazer backup via run-as; nunca tocar em tarefas reais nos testes. Glance: dados do widget vêm de `collectAsState` dentro do `provideContent` (ler só antes deixava o widget desatualizado após ações). Para inspecionar o banco no aparelho: `run-as dev.pulso.app cat databases/pulso.db*` (não há `sqlite3` no aparelho).
+- **CI: EXECUTADO e passou** (2026-11-19, GitHub `github.com/carrijoga/pulso`, após push de `main` 0f4dc0f e da tag `v0.3.0`): "Android checks" (`verify` e `instrumented`) passou; "Release" passou e publicou o prerelease "Pulso 0.3.0" com `pulso-v0.3.0.apk` e `.sha256`.
+- **Moto G84 (2026-11-19, Android 15): PARCIAL.** 12 instrumentados OK; telas, permissão (negada → concedida) e lembretes com ações Concluir/Adiar 1h/Amanhã validados (ver `docs/TESTING.md`). Widget (estreito, baixo, grande) e captura pelo widget validados. Build com banco v3 do M1.5 instalado no G84 em 13:27: migração v2→v3 real sem perda (7 tarefas, 3 reagendamentos). Widget usa lista rolável (`LazyColumn`): o launcher Motorola informa altura menor que a real, então não calcular linhas por altura. Atalho do ícone OK. TalkBack: árvore auditada e corrigida (rótulo no próprio FAB — o texto do ExtendedFAB não aparece para acessibilidade; nada de `clickable` decorativo em fundos/painéis). Fonte 200% OK em todas as telas e no widget. Não testado: navegação TalkBack por gestos. ATENÇÃO: o Pulso no G84 já tem dados reais do usuário — antes de instalar, comparar o identityHash do schema com `room_master_table` do aparelho e fazer backup via exportação JSON do app (Ajustes); nunca tocar em tarefas reais nos testes. Glance: dados do widget vêm de `collectAsState` dentro do `provideContent` (ler só antes deixava o widget desatualizado após ações). Para inspecionar o banco no aparelho: `run-as dev.pulso.app cat databases/pulso.db*` (não há `sqlite3` no aparelho); vale só para builds debug. Com o release instalado, `run-as` não funciona: use a exportação JSON do app.
+- **Moto G84 (2026-11-20):** v0.3.0 de release (versionCode 300, assinada, não debuggable) instalada desde 2026-11-19 20:29; sem crashes do Pulso no log de crash. Telas de recorrência e hábitos ainda NÃO testadas manualmente no aparelho.
 
 - **WP1a do M1.5 (2026-11-19):** `domain/RecurrenceRules.kt` (validate/nextDueAt/occurrencesBetween/describe) + `RecurrenceRulesTest`; `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` passando, **48 testes unitários** (29 novos; contagem anterior neste arquivo, 15/22, estava defasada). Sem instrumentados rodados nesta etapa; sem commit. WP1 (repositório/UI da SPEC 008) não iniciado.
 - **WP1 do M1.5 (2026-11-19, branch `m1.5/wp1-recorrencia`):** repositório (série, próxima ocorrência idempotente, "Desfazer", "Excluir só esta" e "Encerrar repetição"), editor "Repetir" com prévia, rótulo no `TaskCard`, `RecurrencePresets` (+6 unitários). `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` passando, **95 testes unitários**, 0 falhas. Instrumentados: **EXECUTADOS** no emulador API 37 em 2026-11-19: 39/39 OK (inclui `RecurrenceRepositoryTest`, 12 testes da primeira rodada). Correções da revisão (2026-11-19, commit seguinte): `RecurrenceRepositoryTest` tem 15 testes; os 3 novos (desfazer de encerrar, encerrar recusado em concluída, repetição recusada em concluída sem série) **EXECUTADOS** no emulador API 37 (42/42 na branch; 56/56 após o merge em `main`). Não feito: ícone no widget, "Pular esta vez", validação manual em tela e no Moto G84. Sem migração (schema v3 intacto); `setCompleted` agora devolve a ocorrência criada.
@@ -43,10 +44,10 @@
 ## Pendências com maior prioridade
 
 1. Moto G84: só falta navegação TalkBack por gestos (ouvir os anúncios).
-2. Publicar o repositório e rodar o CI.
+2. ~~Publicar o repositório e rodar o CI.~~ Feito em 2026-11-19 (ver estado de validação).
 3. TalkBack/fonte grande nas telas redesenhadas.
 4. Decidir nome final.
-5. M1.5: documentação base pronta (`docs/PLANO-M1.5.md`, SPECs 008–013, ADRs 0005–0008 aceitas em 2026-11-19); WP0 (SPEC 012) implementado; WP1 (SPEC 008) implementado sem validação instrumentada nem manual (ver estado de validação); WP2+ não. Decisões confirmadas: checklist no M1.5, hábitos como entidade separada, aba "Semana", voz pelo reconhecedor do sistema com aviso de privacidade, lembretes de hábito como P2. Próximo passo: executar `RecurrenceRepositoryTest` no emulador, depois WP2 (hábitos, SPEC 009).
+5. M1.5: WP0, WP1, WP2 e WP4 implementados (WP1/WP2 em `main` e na v0.3.0; telas novas no G84 pendentes). Próximo: validar recorrência e hábitos no G84; WP3 (SPEC 010) e WP5 (SPEC 013) em paralelo. Decisões em `docs/PLANO-M1.5.md` §2.
 
 ## Não decidir sem solicitar
 
