@@ -42,15 +42,17 @@
 - **Ajuste de meta na semana de criação de hábitos (2026-11-19):** `HabitRules.weekProgress` recebe `createdOn` e aplica meta proporcional só na semana que contém a criação (SPEC 009, "Semana de criação"); sequência e visibilidade de `TIMES_PER_WEEK` usam a mesma regra. `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` passando, **89 testes unitários** (`HabitRulesTest` 37). Sem instrumentados; sem push.
 - **WP4 do M1.5 (2026-11-19):** captura por voz (SPEC 011) implementada: `ui/VoiceCapture.kt`, `<queries>` no manifesto (sem `RECORD_AUDIO`/`INTERNET`, conferido no merged manifest), botão "Ditar anotação" na `CaptureActivity` e no campo da Entrada (só com reconhecedor), atalho "Por voz" (`EXTRA_START_VOICE`), flag `voiceNoticeShown` no DataStore, seção Privacidade em Ajustes. Build/lint/80 unitários passando; emulador conferido parcialmente (ver `docs/TESTING.md`); fala real, atalho e Moto G84 NÃO testados; botão no widget pendente (P2). Sem commit.
 
+- **WP5 do M1.5 (2026-11-20, branch `m1.5/wp5-categorias`):** `domain/ChecklistRules.kt` (texto 1..200, até 100 itens, `isLastUnchecked`, `placeAt`), `CategoryRules.overview`/`suggestions` (em `OrganizeRules.kt`), busca inclui os itens; `TaskItem.checklist` e `TaskDraft.checklist` (criação); métodos de checklist no `TaskRepository` (cada escrita toca `task.updatedAt` e chama `taskChanged`); `ChecklistDao.observeActive()` (query nova, sem mudança de schema); `ui/CategoryScreen.kt` (sobreposição), `ui/ChecklistEditor.kt` (seção "Itens" no editor), progresso "3/8" no `TaskCard`, sugestões em Ajustes → Categorias. **EXECUTADO (2026-11-20, JBR do Android Studio):** `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:compileDebugAndroidTestKotlin` passando; **115 testes unitários** (9 novos: `ChecklistRulesTest` 6, `CategoryRulesTest` 3), 0 falhas; lint 0 erros (12 avisos, todos já existentes). **Instrumentados: EXECUTADOS** no emulador API 37 em 2026-11-20 (reportado pelo coordenador): **61/61 OK**, incluindo `ChecklistRepositoryTest` (5 testes, antes da revisão). Após a revisão (commit seguinte), o teste de desfazer com limite e as asserções de retorno/item excluído foram adicionados e **compilam, mas NÃO foram executados**. **NÃO EXECUTADO:** fluxo de UI em tela, TalkBack, fonte grande, Moto G84. Schema v3 e backup intactos. Sem commit até o fechamento desta etapa.
+
 ## Pendências com maior prioridade
 
 1. Moto G84: só falta navegação TalkBack por gestos (ouvir os anúncios).
 2. ~~Publicar o repositório e rodar o CI.~~ Feito em 2026-11-19 (ver estado de validação).
 3. TalkBack/fonte grande nas telas redesenhadas.
 4. Decidir nome final.
-5. M1.5: WP0, WP1, WP2 e WP4 implementados (WP1/WP2 em `main` e na v0.3.0; telas novas no G84 pendentes). Próximo: validar recorrência, hábitos e a aba Semana no G84; WP5 (SPEC 013) pendente. Decisões em `docs/PLANO-M1.5.md` §2.
+5. M1.5: WP0–WP5 implementados (WP1/WP2 na v0.3.0; WP3 e WP5 integrados em `main` em 2026-11-20). Próximo: validar recorrência, hábitos, Semana e checklist no G84; subtarefas com hierarquia de 1 nível (schema v4, decisão do dono do produto em 2026-11-20). Decisões em `docs/PLANO-M1.5.md` §2.
 
-6. Ideias incorporadas em 2026-11-19 (pasta `docs/ideias/` esvaziada): SPEC 014 (widgets configuráveis + anotação rápida; relato de widget cortando/sem rolar contradiz SPEC 003, reproduzir no G84 antes) e SPEC 013 §5 (subtarefas: (a) checklist promovível ou (b) hierarquia com ADR). Aguardam decisão do dono do produto.
+6. Ideias incorporadas em 2026-11-19 (pasta `docs/ideias/` esvaziada): SPEC 014 (widgets configuráveis + anotação rápida; relato de widget cortando/sem rolar contradiz SPEC 003, reproduzir no G84 antes). Subtarefas (SPEC 013 §5) decididas em 2026-11-20: opção (b) hierarquia, 1 nível, mãe e filhas independentes.
 
 ## Não decidir sem solicitar
 

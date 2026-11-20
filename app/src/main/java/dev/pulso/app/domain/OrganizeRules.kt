@@ -20,7 +20,7 @@ object SearchRules {
     }
 
     fun matchesTask(query: String, task: TaskItem): Boolean =
-        matches(query, task.title, task.notes, task.category, task.links)
+        matches(query, task.title, task.notes, task.category, task.links, *task.checklist.map { it.text }.toTypedArray())
 
     fun matchesInbox(query: String, item: InboxItem): Boolean = matches(query, item.text)
 }
@@ -37,6 +37,35 @@ object CategoryRules {
                 "Já existe uma categoria com esse nome."
             }
         }
+
+    /** Ready-made categories offered in Ajustes (SPEC 013 §3). Not seeded automatically. */
+    val SUGGESTIONS = listOf("Manutenção", "Casamento", "Encomendas")
+
+    /** Suggestions whose name (accent/case-insensitive) is not already a category. */
+    fun suggestions(existing: List<Category>): List<String> =
+        SUGGESTIONS.filter { name -> existing.none { SearchRules.fold(it.name) == SearchRules.fold(name) } }
+
+    /** Tasks of one category for its screen: active ones grouped by state, plus the completed history. */
+    fun overview(tasks: List<TaskItem>, category: String, nowMillis: Long): CategoryOverview {
+        val key = SearchRules.fold(category)
+        val mine = tasks.filter { SearchRules.fold(it.category) == key }
+        val active = mine.filterNot { it.isCompleted }
+        return CategoryOverview(
+            overdue = active.filter { TaskRules.isOverdue(it, nowMillis) }.sortedBy { it.dueAt },
+            scheduled = active.filter { it.dueAt != null && !TaskRules.isOverdue(it, nowMillis) }.sortedBy { it.dueAt },
+            withoutDue = active.filter { it.dueAt == null },
+            completed = mine.filter { it.isCompleted }.sortedByDescending { it.completedAt },
+        )
+    }
+}
+
+data class CategoryOverview(
+    val overdue: List<TaskItem>,
+    val scheduled: List<TaskItem>,
+    val withoutDue: List<TaskItem>,
+    val completed: List<TaskItem>,
+) {
+    val activeCount: Int get() = overdue.size + scheduled.size + withoutDue.size
 }
 
 data class WeeklyReview(

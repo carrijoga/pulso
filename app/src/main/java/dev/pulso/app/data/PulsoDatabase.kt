@@ -188,6 +188,14 @@ interface ChecklistDao {
     @Query("SELECT * FROM checklist_items WHERE taskId = :taskId AND deletedAt IS NULL ORDER BY position")
     fun observeForTask(taskId: String): Flow<List<ChecklistItemEntity>>
 
+    /**
+     * Every active item of a live task, grouped by task in the repository: progress and search (SPEC 013).
+     * Items of a deleted task (tombstone) are hidden, not removed; restoring the task shows them again.
+     */
+    @Query("""SELECT c.* FROM checklist_items c INNER JOIN task_items t ON t.id = c.taskId
+        WHERE c.deletedAt IS NULL AND t.deletedAt IS NULL ORDER BY c.position""")
+    fun observeActive(): Flow<List<ChecklistItemEntity>>
+
     /** Active items of a task, used to copy the checklist into the next occurrence (SPEC 008). */
     @Query("SELECT * FROM checklist_items WHERE taskId = :taskId AND deletedAt IS NULL ORDER BY position")
     suspend fun activeForTask(taskId: String): List<ChecklistItemEntity>

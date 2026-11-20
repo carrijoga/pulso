@@ -135,12 +135,16 @@ private enum class Tab(val label: String, val selectedIcon: ImageVector, val ico
     WEEK("Semana", Icons.Rounded.CalendarViewWeek, Icons.Outlined.CalendarViewWeek),
     SETTINGS("Ajustes", Icons.Rounded.Settings, Icons.Outlined.Settings),
 }
-private enum class Overlay(val title: String) { SEARCH("Buscar"), REVIEW("Revisão semanal"), HABITS("Hábitos") }
+private enum class Overlay(val title: String) {
+    SEARCH("Buscar"), REVIEW("Revisão semanal"), HABITS("Hábitos"),
+    /** Title is the category name (see [PulsoScreens]). */
+    CATEGORY("Categoria"),
+}
 
 /** Which editor sheet is open. Stored as ids so it survives rotation and follows Room updates. */
 private sealed interface Editor {
-    /** [day] pre-fills the due date at the default time (the "+" of the Semana tab). */
-    data class NewTask(val day: LocalDate? = null) : Editor
+    /** [day] pre-fills the due date (Semana "+"); [category] pre-fills the category (category screen). */
+    data class NewTask(val day: LocalDate? = null, val category: String? = null) : Editor
     data class Edit(val taskId: String) : Editor
     data class Organize(val inboxId: String) : Editor
 }
@@ -162,13 +166,15 @@ fun PulsoScreens(vm: PulsoViewModel) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     var overlay by rememberSaveable { mutableStateOf<Overlay?>(null) }
+    var categoryName by rememberSaveable { mutableStateOf<String?>(null) }
     var editorKey by rememberSaveable { mutableStateOf<String?>(null) }
     // Day in focus on the Semana tab (epoch day); the "+" creates a task on it.
     var weekFocus by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
     val editor: Editor? = editorKey?.let { key ->
         when {
             key == "new" -> Editor.NewTask()
-            key.startsWith("new:") -> Editor.NewTask(LocalDate.parse(key.removePrefix("new:")))
+            key.startsWith("newday:") -> Editor.NewTask(day = LocalDate.parse(key.removePrefix("newday:")))
+            key.startsWith("newcat:") -> Editor.NewTask(category = key.removePrefix("newcat:"))
             key.startsWith("edit:") -> Editor.Edit(key.removePrefix("edit:"))
             key.startsWith("organize:") -> Editor.Organize(key.removePrefix("organize:"))
             else -> null
@@ -211,7 +217,8 @@ fun PulsoScreens(vm: PulsoViewModel) {
                 title = {
                     AnimatedContent(overlay, transitionSpec = { fadeIn(tween(PulsoMotion.SHORT)) togetherWith fadeOut(tween(PulsoMotion.SHORT)) },
                         label = "topTitle") { current ->
-                        if (current != null) Text(current.title, style = MaterialTheme.typography.titleLarge)
+                        if (current != null) Text(if (current == Overlay.CATEGORY) categoryName ?: current.title else current.title,
+                            style = MaterialTheme.typography.titleLarge)
                         else Row(verticalAlignment = Alignment.CenterVertically) {
                             PulseMark(size = 30.dp, animate = true)
                             Spacer(Modifier.width(10.dp))
@@ -236,7 +243,7 @@ fun PulsoScreens(vm: PulsoViewModel) {
                     modifier = Modifier.semantics { contentDescription = fabLabel },
                     onClick = {
                         // Never a day before today, even if the focus is stale (the Semana tab also resets it on entry).
-                        if (tab == Tab.WEEK) editorKey = "new:${maxOf(LocalDate.ofEpochDay(weekFocus), LocalDate.now())}"
+                        if (tab == Tab.WEEK) editorKey = "newday:${maxOf(LocalDate.ofEpochDay(weekFocus), LocalDate.now())}"
                         else if (newTask) editorKey = "new"
                         else context.startActivity(Intent(context, CaptureActivity::class.java))
                     },
@@ -289,6 +296,9 @@ fun PulsoScreens(vm: PulsoViewModel) {
                             onFinish = { vm.markReviewDone(); overlay = null })
                     }
                     Overlay.HABITS.name -> HabitManagerScreen(habitState, habitVm)
+                    Overlay.CATEGORY.name -> Box(Modifier.padding(horizontal = 16.dp)) {
+                        CategoryScreen(categoryName.orEmpty(), state, actions, onNewTask = { editorKey = "newcat:$it" })
+                    }
                     Tab.TODAY.name -> TodayScreen(state, actions, listStates.getValue(Tab.TODAY),
                         habits = habitState, habitVm = habitVm,
                         onReview = { overlay = Overlay.REVIEW }, onOpenHabits = { overlay = Overlay.HABITS },
@@ -299,7 +309,8 @@ fun PulsoScreens(vm: PulsoViewModel) {
                         focusDay = LocalDate.ofEpochDay(weekFocus), onFocusDay = { weekFocus = it.toEpochDay() },
                         onReschedule = vm::reschedule, onOpenTasks = { tab = Tab.TASKS })
                     else -> Column(Modifier.padding(horizontal = 16.dp)) {
-                        SettingsScreen(state, vm, notifications, onOpenHabits = { overlay = Overlay.HABITS })
+                        SettingsScreen(state, vm, notifications, onOpenHabits = { overlay = Overlay.HABITS },
+                            onOpenCategory = { categoryName = it; overlay = Overlay.CATEGORY })
                     }
                 }
             }
@@ -316,11 +327,15 @@ fun PulsoScreens(vm: PulsoViewModel) {
             history = if (existing != null) remember(existing.id) { vm.rescheduleHistory(existing.id) }
                 else remember { kotlinx.coroutines.flow.flowOf(emptyList()) },
             onDelete = existing?.let { task -> { dismiss(); vm.delete(task.id) } },
-            onEndSeries = existing?.takeIf { it.recurrence != null && !it.isCompleted }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } })
+            onEndSeries = existing?.takeIf { it.recurrence != null && !it.isCompleted }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } },
+            checklist = if (existing != null) remember(existing.id) { vm.checklist(existing.id) }
+                else remember { kotlinx.coroutines.flow.flowOf(emptyList()) },
+            checklistHandler = existing?.let { vm.checklistHandler(it) })
     }
     when (editor) {
-        is Editor.NewTask -> common(TaskDraft(title = "", dueAt = editor.day?.let {
-                TaskRules.dueAtFor(it, state.settings.defaultDueTime, ZoneId.systemDefault()) }),
+        is Editor.NewTask -> common(TaskDraft(title = "",
+                category = editor.category ?: TaskRules.DEFAULT_CATEGORY,
+                dueAt = editor.day?.let { TaskRules.dueAtFor(it, state.settings.defaultDueTime, ZoneId.systemDefault()) }),
                 "Nova tarefa", null) { draft, done ->
             vm.create(draft) { failure -> if (failure == null) dismiss(); done(failure) }
         }

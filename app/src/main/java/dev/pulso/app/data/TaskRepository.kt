@@ -3,6 +3,8 @@ package dev.pulso.app.data
 import androidx.room.withTransaction
 import dev.pulso.app.domain.Category
 import dev.pulso.app.domain.CategoryRules
+import dev.pulso.app.domain.ChecklistItem
+import dev.pulso.app.domain.ChecklistRules
 import dev.pulso.app.domain.DaysOfWeekMask
 import dev.pulso.app.domain.InboxItem
 import dev.pulso.app.domain.InboxStatus
@@ -50,6 +52,19 @@ interface TaskRepository {
     suspend fun addCategory(name: String)
     suspend fun renameCategory(id: String, name: String)
     suspend fun deleteCategory(id: String)
+
+    /** Active checklist items of a task, in order (SPEC 013). */
+    fun observeChecklist(taskId: String): Flow<List<ChecklistItem>>
+    /** Adds an item at the end (up to [ChecklistRules.MAX_ITEMS]). Touches the task in the same transaction. */
+    suspend fun addChecklistItem(taskId: String, text: String)
+    /** Checks or unchecks. Returns true only when the stored state changed (false: same state, or item gone). */
+    suspend fun setChecklistItemChecked(itemId: String, checked: Boolean): Boolean
+    suspend fun editChecklistItem(itemId: String, text: String)
+    /** Tombstone; [restoreChecklistItem] puts it back at its place. */
+    suspend fun deleteChecklistItem(itemId: String)
+    suspend fun restoreChecklistItem(itemId: String)
+    /** Moves the item to [newIndex] among the active items of its task (clamped). */
+    suspend fun moveChecklistItem(itemId: String, newIndex: Int)
 }
 
 /** Port for side effects of task changes (reminders + widget). [reminderAt] null cancels the reminder. */
@@ -77,15 +92,16 @@ class LocalTaskRepository(
         inboxDao.observeSearchable().map { list -> list.map(InboxEntity::toModel) }
 
     override fun observeTasks(): Flow<List<TaskItem>> = combine(
-        taskDao.observeActiveAndCompleted(), seriesDao.observeActive(),
-    ) { tasks, series ->
+        taskDao.observeActiveAndCompleted(), seriesDao.observeActive(), checklistDao.observeActive(),
+    ) { tasks, series, items ->
         val bySeries = series.associateBy(SeriesEntity::id)
+        val byTask = items.groupBy(ChecklistItemEntity::taskId)
         tasks.map { row ->
-            val model = row.toModel()
+            val model = row.toModel().copy(checklist = byTask[row.task.id].orEmpty().map(ChecklistItemEntity::toModel))
             // A task whose series ended keeps its seriesId for history but shows no repetition.
-            val series = row.task.seriesId?.let { bySeries[it] }
-            if (series == null) model
-            else model.copy(recurrence = series.toRule(), recurrenceAnchorDueAt = series.anchorDueAt)
+            val seriesRow = row.task.seriesId?.let { bySeries[it] }
+            if (seriesRow == null) model
+            else model.copy(recurrence = seriesRow.toRule(), recurrenceAnchorDueAt = seriesRow.anchorDueAt)
         }
     }
 
@@ -122,6 +138,7 @@ class LocalTaskRepository(
             if (inbox != null && inbox.status == InboxStatus.INBOX.name) {
                 val seriesId = createSeries(validated, timestamp)
                 taskDao.upsert(newTask(taskId, validated, timestamp, seriesId))
+                insertChecklist(taskId, validated.checklist, timestamp)
                 inboxDao.upsert(inbox.copy(status = InboxStatus.CONVERTED.name,
                     convertedTaskId = taskId, updatedAt = timestamp))
                 converted = true
@@ -137,8 +154,16 @@ class LocalTaskRepository(
         database.withTransaction {
             val seriesId = createSeries(valid, timestamp)
             taskDao.upsert(newTask(id, valid, timestamp, seriesId))
+            insertChecklist(id, valid.checklist, timestamp)
         }
         changeListener.taskChanged(id, valid.dueAt)
+    }
+
+    /** Initial checklist of a new task, unchecked, in the given order. Must run in a transaction. */
+    private suspend fun insertChecklist(taskId: String, texts: List<String>, at: Long) {
+        texts.forEachIndexed { index, text ->
+            checklistDao.upsert(ChecklistItemEntity(UUID.randomUUID().toString(), taskId, text, index, null, at, at))
+        }
     }
 
     private fun newTask(id: String, draft: TaskDraft, timestamp: Long, seriesId: String? = null) = TaskEntity(
@@ -355,6 +380,106 @@ class LocalTaskRepository(
         daysOfWeek = DaysOfWeekMask.toMask(rule.daysOfWeek), basis = rule.basis.name,
         anchorDueAt = anchorDueAt, createdAt = createdAt, updatedAt = at,
     )
+
+    override fun observeChecklist(taskId: String): Flow<List<ChecklistItem>> =
+        checklistDao.observeForTask(taskId).map { list -> list.map(ChecklistItemEntity::toModel) }
+
+    override suspend fun addChecklistItem(taskId: String, text: String) {
+        val clean = ChecklistRules.validateText(text)
+        val at = now()
+        val task = database.withTransaction {
+            val touched = touchTask(taskId, at) ?: return@withTransaction null
+            val active = checklistDao.activeForTask(taskId)
+            require(active.size < ChecklistRules.MAX_ITEMS) { "Use até ${ChecklistRules.MAX_ITEMS} itens por tarefa." }
+            checklistDao.upsert(ChecklistItemEntity(UUID.randomUUID().toString(), taskId, clean,
+                position = (active.maxOfOrNull { it.position } ?: -1) + 1, createdAt = at, updatedAt = at))
+            touched
+        } ?: return
+        notify(task)
+    }
+
+    override suspend fun setChecklistItemChecked(itemId: String, checked: Boolean): Boolean {
+        val at = now()
+        val task = database.withTransaction {
+            val item = activeItem(itemId) ?: return@withTransaction null
+            if ((item.checkedAt != null) == checked) return@withTransaction null
+            val touched = touchTask(item.taskId, at) ?: return@withTransaction null
+            checklistDao.upsert(item.copy(checkedAt = if (checked) at else null, updatedAt = at))
+            touched
+        } ?: return false
+        notify(task)
+        return true
+    }
+
+    override suspend fun editChecklistItem(itemId: String, text: String) {
+        val clean = ChecklistRules.validateText(text)
+        val at = now()
+        val task = database.withTransaction {
+            val item = activeItem(itemId) ?: return@withTransaction null
+            val touched = touchTask(item.taskId, at) ?: return@withTransaction null
+            checklistDao.upsert(item.copy(text = clean, updatedAt = at))
+            touched
+        } ?: return
+        notify(task)
+    }
+
+    override suspend fun deleteChecklistItem(itemId: String) {
+        val at = now()
+        val task = database.withTransaction {
+            val item = activeItem(itemId) ?: return@withTransaction null
+            val touched = touchTask(item.taskId, at) ?: return@withTransaction null
+            checklistDao.upsert(item.copy(deletedAt = at, updatedAt = at))
+            touched
+        } ?: return
+        notify(task)
+    }
+
+    override suspend fun restoreChecklistItem(itemId: String) {
+        val at = now()
+        val task = database.withTransaction {
+            val item = checklistDao.findById(itemId)?.takeIf { it.deletedAt != null } ?: return@withTransaction null
+            val touched = touchTask(item.taskId, at) ?: return@withTransaction null
+            // The same limit as add: an undo must not push a task past MAX_ITEMS.
+            val others = checklistDao.activeForTask(item.taskId).filter { it.id != itemId }
+            require(others.size < ChecklistRules.MAX_ITEMS) { "Use até ${ChecklistRules.MAX_ITEMS} itens por tarefa." }
+            val restored = item.copy(deletedAt = null, updatedAt = at)
+            checklistDao.upsert(restored)
+            // Back at its old index: the active items keep their order, the restored one is placed by its position.
+            renumber(ChecklistRules.placeAt(others.map { it.id }, itemId, item.position), others + restored, at)
+            touched
+        } ?: return
+        notify(task)
+    }
+
+    override suspend fun moveChecklistItem(itemId: String, newIndex: Int) {
+        val at = now()
+        val task = database.withTransaction {
+            val item = activeItem(itemId) ?: return@withTransaction null
+            val touched = touchTask(item.taskId, at) ?: return@withTransaction null
+            val items = checklistDao.activeForTask(item.taskId)
+            renumber(ChecklistRules.placeAt(items.map { it.id }, itemId, newIndex), items, at)
+            touched
+        } ?: return
+        notify(task)
+    }
+
+    private suspend fun activeItem(itemId: String): ChecklistItemEntity? =
+        checklistDao.findById(itemId)?.takeIf { it.deletedAt == null }
+
+    /** Sets `updatedAt` on a live task (every checklist write is a task change, SPEC 013). Null if it is gone. */
+    private suspend fun touchTask(taskId: String, at: Long): TaskEntity? {
+        val task = taskDao.findById(taskId)?.takeIf { it.deletedAt == null } ?: return null
+        return task.copy(updatedAt = at).also { taskDao.upsert(it) }
+    }
+
+    /** Writes `position = index` for items whose index changed; [order] lists every item id in the new order. */
+    private suspend fun renumber(order: List<String>, items: List<ChecklistItemEntity>, at: Long) {
+        val byId = items.associateBy { it.id }
+        order.forEachIndexed { index, id ->
+            val item = byId.getValue(id)
+            if (item.position != index) checklistDao.upsert(item.copy(position = index, updatedAt = at))
+        }
+    }
 
     private suspend fun notify(task: TaskEntity) {
         changeListener.taskChanged(task.id, if (task.deletedAt != null) null else TaskRules.reminderTime(task.toModel()))

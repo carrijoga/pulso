@@ -1,6 +1,20 @@
 # SPEC 013 — Visões por categoria e checklist (M1.5, WP5)
 
-**Status:** Planejado. Checklist confirmado no escopo; depende do WP0 (tabela `checklist_items`).
+**Status:** Parcial (WP5 implementado em 2026-11-20; unitários **EXECUTADOS** (115/115); instrumentados **EXECUTADOS** no emulador API 37 em 2026-11-20 (61/61, incluindo `ChecklistRepositoryTest`, 5 testes, antes da revisão); Moto G84 pendente). Depende do WP0 (SPEC 012).
+
+Revisão do WP5 (2026-11-20, commit separado): texto digitado em "Adicionar item" é salvo com a tarefa ao tocar Salvar; desfazer de exclusão recusa acima de 100 itens; `ChecklistDao.observeActive` ignora itens de tarefa excluída (JOIN, sem mudança de schema); `setChecklistItemChecked` devolve Boolean e "Concluir tarefa?" só aparece quando a escrita mudou o estado; item do diálogo é indexado por id; checkbox e texto formam um único nó `toggleable` para o TalkBack, com botão "Editar" separado. Os dois testes/asserções novos desta revisão (`undoIsRefusedWhenTheTaskIsFull`, asserção de `setChecklistItemChecked` e de item de tarefa excluída) **não foram executados** após a correção; o caso de salvar texto pendente não tem teste automatizado (UI Compose).
+
+### Implementação (WP5)
+
+- Regras puras: `domain/ChecklistRules.kt` (texto 1..200, até 100 itens por tarefa, `isLastUnchecked`, `placeAt` para mover e desfazer exclusão) e `CategoryRules.overview`/`suggestions` em `domain/OrganizeRules.kt`. `SearchRules.matchesTask` também lê os textos dos itens.
+- Dados: sem mudança de schema. `ChecklistDao.observeActive()` é a única query nova; `TaskRepository` ganhou `observeChecklist`, `addChecklistItem`, `setChecklistItemChecked`, `editChecklistItem`, `deleteChecklistItem` (tombstone), `restoreChecklistItem` (Desfazer) e `moveChecklistItem`. Cada escrita toca `task.updatedAt` na mesma transação e chama `taskChanged`. Quando um item não muda de estado, nada é gravado. `observeTasks` preenche `TaskItem.checklist`.
+- UI: `ui/CategoryScreen.kt` (sobreposição, aberta por Ajustes → Categorias; "Nova tarefa" já vem com a categoria); `ui/ChecklistEditor.kt` (seção "Itens" no editor: campo com Concluir/"+" que mantém o foco, checkbox, tocar no texto abre editar/subir/descer/excluir); `TaskCard` mostra "n/m" quando há itens; Ajustes → Categorias ganhou sugestões que não repetem nomes existentes.
+- Criação: itens digitados antes de salvar entram com a tarefa (`TaskDraft.checklist`). Em edição, as mudanças valem na hora pelos métodos de checklist; `editTask` ignora `draft.checklist`.
+- Recorrência: a próxima ocorrência copia o checklist com todos os itens desmarcados (comportamento do WP1, `spawnNextOccurrence`).
+- Decisões: "Concluir tarefa?" sai como mensagem (snackbar) pelo ViewModel, como a spec pede; dentro do editor (folha modal) ela só fica visível depois que a folha fecha. Precisa conferir no aparelho.
+- Limitações: entrada da tela por categoria só por Ajustes → Categorias. Tocar no ponto da categoria no `TaskCard` e no editor **não** foi implementado (o alvo de 48dp dentro do cartão não estava resolvido). A aba Tarefas já tinha chips de categoria com "Todas" (SPEC 007); não foram alterados.
+- Ambiguidade da spec: "a próxima ocorrência copia os itens desmarcados" (§4) pode ser lido como "copia só os desmarcados". O comportamento atual (WP1) copia todos, desmarcados. Mantido; confirmar com o dono do produto.
+- Fora do WP5 (decisão pendente do dono do produto): subtarefas e promover item a tarefa.
 
 ## Objetivo
 
@@ -24,7 +38,7 @@ Sem integração com transportadoras, lojas ou APIs (o app não tem `INTERNET`).
 - Conteúdo: título = nome da categoria; contadores "N ativas · M atrasadas"; seções Atrasadas, Com prazo (por data), Sem prazo, Concluídas (recolhida). Campo de busca restrito à categoria (`SearchRules.matchesTask` + filtro de categoria).
 - "+" cria "Nova tarefa" com a categoria pré-preenchida.
 - Correspondência de categoria por `SearchRules.fold` (ignora acento/maiúsculas), igual à unicidade de `CategoryRules`.
-- Regra pura em `domain/`: `CategoryRules.overview(tasks, category, nowMillis, zone): CategoryOverview`.
+- Regra pura em `domain/`: `CategoryRules.overview(tasks, category, nowMillis): CategoryOverview` (sem `zone`: atrasada é comparada por instante, e a ordenação não agrupa por dia).
 
 ## 2. Filtro por categoria na aba Tarefas
 
@@ -55,11 +69,14 @@ Recomendação: entregar primeiro o checklist (§4) e decidir entre (a) e (b) co
 
 ## Aceites
 
-- [ ] `CategoryRules.overview` testado (acentos/maiúsculas, atrasadas, concluídas).
-- [ ] Filtro por chips combina com filtros existentes.
-- [ ] Sugestões não duplicam nomes existentes (`CategoryRules.validateName`).
-- [ ] Checklist: adicionar/marcar/reordenar/excluir com tombstone; cópia desmarcada na próxima ocorrência; busca encontra item; backup ida e volta.
-- [ ] Manual: lista de compras com 20 itens no Moto G84 com teclado aberto; TalkBack lê "arroz, marcado".
+Evidência: `:app:testDebugUnitTest` (115 testes, 0 falhas) em 2026-11-20, JBR do Android Studio. Instrumentados só compilados.
+
+- [x] `CategoryRules.overview` testado (acentos/maiúsculas, atrasadas, agendadas, sem prazo, concluídas em ordem de conclusão): `CategoryRulesTest`.
+- [~] Filtro por chips combina com filtros existentes: os chips e a combinação já existem na aba Tarefas (SPEC 007, código lido, não coberto por teste de UI). Não verificado em tela.
+- [x] Sugestões não duplicam nomes existentes, sem diferença de acento/maiúscula: `CategoryRulesTest.suggestions`. O cadastro usa o mesmo `CategoryRules.validateName` de antes.
+- [x] Checklist: adicionar/marcar/reordenar/excluir com tombstone, cópia desmarcada na próxima ocorrência, busca. Busca: `ChecklistRulesTest`. Adicionar/marcar/editar/mover/excluir/desfazer, limite e cópia da recorrência: `ChecklistRepositoryTest`, **EXECUTADO** no emulador API 37 em 2026-11-20 (reportado pelo coordenador; 61/61 na rodada, antes da revisão).
+- [~] Backup ida e volta com itens: coberto pela SPEC 012 (`BackupServiceTest`), não reexecutado nesta etapa.
+- [ ] Manual: lista de compras com 20 itens no Moto G84 com teclado aberto; TalkBack lê "arroz, marcado". NÃO FEITO.
 
 ## Fora de escopo
 

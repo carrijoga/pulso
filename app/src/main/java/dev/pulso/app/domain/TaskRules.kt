@@ -34,6 +34,7 @@ object TaskRules {
         notes = draft.notes.trim(),
         category = draft.category.trim().ifEmpty { DEFAULT_CATEGORY },
         links = normalizeLinks(draft.links),
+        checklist = ChecklistRules.validateItems(draft.checklist),
     )
 
     /** One link per line; blank lines dropped, duplicates removed, order kept. */
