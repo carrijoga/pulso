@@ -12,3 +12,6 @@ local.properties
 *.aab
 **/captures/
 gradle/wrapper/gradle-wrapper.jar
+
+# graphify knowledge-graph output (regenerable)
+graphify-out/
