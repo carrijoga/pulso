@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -67,13 +68,27 @@ class ChecklistRepositoryTest {
         repo.createTask(TaskDraft("Mercado", checklist = listOf("arroz")))
         val task = onlyTask()
         val id = task.checklist.single().id
-        repo.setChecklistItemChecked(id, true)
+        assertTrue(repo.setChecklistItemChecked(id, true))
         val changedAt = onlyTask().updatedAt
         val calls = listener.calls.size
         clock.advance(500)
-        repo.setChecklistItemChecked(id, true)
+        assertFalse(repo.setChecklistItemChecked(id, true))
         assertEquals(calls, listener.calls.size)
         assertEquals(changedAt, onlyTask().updatedAt)
+    }
+
+    @Test fun undoIsRefusedWhenTheTaskIsFull() = runTest {
+        repo.createTask(TaskDraft("Mercado", checklist = List(100) { "item $it" }))
+        val id = onlyTask().id
+        val first = onlyTask().checklist.first().id
+        repo.deleteChecklistItem(first)
+        repo.addChecklistItem(id, "extra")
+        assertEquals(100, onlyTask().checklist.size)
+        var refused = false
+        try { repo.restoreChecklistItem(first) } catch (_: IllegalArgumentException) { refused = true }
+        assertTrue(refused)
+        assertEquals(100, onlyTask().checklist.size)
+        assertFalse(onlyTask().checklist.any { it.text == "item 0" })
     }
 
     @Test fun limitAndBlankTextAreRefusedWithoutWriting() = runTest {
@@ -88,12 +103,15 @@ class ChecklistRepositoryTest {
         assertEquals(100, onlyTask().checklist.size)
     }
 
-    @Test fun itemsOfDeletedTaskAreNotWritten() = runTest {
-        repo.createTask(TaskDraft("Mercado"))
+    @Test fun itemsOfDeletedTaskAreNotWrittenAndHiddenUntilRestored() = runTest {
+        repo.createTask(TaskDraft("Mercado", checklist = listOf("arroz")))
         val id = onlyTask().id
         repo.deleteTask(id)
-        repo.addChecklistItem(id, "arroz")
-        assertEquals(0, db.checklistDao().allForBackup().size)
+        repo.addChecklistItem(id, "café") // refused silently: the task is gone
+        assertEquals(1, db.checklistDao().allForBackup().size)
+        assertEquals(0, db.checklistDao().observeActive().first().size)
+        repo.restoreTask(id)
+        assertEquals(listOf("arroz"), onlyTask().checklist.map { it.text })
     }
 
     @Test fun nextOccurrenceCopiesTheChecklistWithEveryItemUnchecked() = runTest {

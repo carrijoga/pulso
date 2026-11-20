@@ -57,8 +57,8 @@ interface TaskRepository {
     fun observeChecklist(taskId: String): Flow<List<ChecklistItem>>
     /** Adds an item at the end (up to [ChecklistRules.MAX_ITEMS]). Touches the task in the same transaction. */
     suspend fun addChecklistItem(taskId: String, text: String)
-    /** Checks or unchecks; nothing changes when the item already has that state. */
-    suspend fun setChecklistItemChecked(itemId: String, checked: Boolean)
+    /** Checks or unchecks. Returns true only when the stored state changed (false: same state, or item gone). */
+    suspend fun setChecklistItemChecked(itemId: String, checked: Boolean): Boolean
     suspend fun editChecklistItem(itemId: String, text: String)
     /** Tombstone; [restoreChecklistItem] puts it back at its place. */
     suspend fun deleteChecklistItem(itemId: String)
@@ -398,7 +398,7 @@ class LocalTaskRepository(
         notify(task)
     }
 
-    override suspend fun setChecklistItemChecked(itemId: String, checked: Boolean) {
+    override suspend fun setChecklistItemChecked(itemId: String, checked: Boolean): Boolean {
         val at = now()
         val task = database.withTransaction {
             val item = activeItem(itemId) ?: return@withTransaction null
@@ -406,8 +406,9 @@ class LocalTaskRepository(
             val touched = touchTask(item.taskId, at) ?: return@withTransaction null
             checklistDao.upsert(item.copy(checkedAt = if (checked) at else null, updatedAt = at))
             touched
-        } ?: return
+        } ?: return false
         notify(task)
+        return true
     }
 
     override suspend fun editChecklistItem(itemId: String, text: String) {
@@ -438,10 +439,12 @@ class LocalTaskRepository(
         val task = database.withTransaction {
             val item = checklistDao.findById(itemId)?.takeIf { it.deletedAt != null } ?: return@withTransaction null
             val touched = touchTask(item.taskId, at) ?: return@withTransaction null
+            // The same limit as add: an undo must not push a task past MAX_ITEMS.
+            val others = checklistDao.activeForTask(item.taskId).filter { it.id != itemId }
+            require(others.size < ChecklistRules.MAX_ITEMS) { "Use até ${ChecklistRules.MAX_ITEMS} itens por tarefa." }
             val restored = item.copy(deletedAt = null, updatedAt = at)
             checklistDao.upsert(restored)
             // Back at its old index: the active items keep their order, the restored one is placed by its position.
-            val others = checklistDao.activeForTask(item.taskId).filter { it.id != itemId }
             renumber(ChecklistRules.placeAt(others.map { it.id }, itemId, item.position), others + restored, at)
             touched
         } ?: return

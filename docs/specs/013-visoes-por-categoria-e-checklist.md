@@ -1,6 +1,8 @@
 # SPEC 013 — Visões por categoria e checklist (M1.5, WP5)
 
-**Status:** Parcial (WP5 implementado em 2026-11-20; unitários **EXECUTADOS** (115/115 na branch); instrumentados do repositório **compilados, não executados**; Moto G84 pendente). Depende do WP0 (SPEC 012).
+**Status:** Parcial (WP5 implementado em 2026-11-20; unitários **EXECUTADOS** (115/115); instrumentados **EXECUTADOS** no emulador API 37 em 2026-11-20 (61/61, incluindo `ChecklistRepositoryTest`, 5 testes, antes da revisão); Moto G84 pendente). Depende do WP0 (SPEC 012).
+
+Revisão do WP5 (2026-11-20, commit separado): texto digitado em "Adicionar item" é salvo com a tarefa ao tocar Salvar; desfazer de exclusão recusa acima de 100 itens; `ChecklistDao.observeActive` ignora itens de tarefa excluída (JOIN, sem mudança de schema); `setChecklistItemChecked` devolve Boolean e "Concluir tarefa?" só aparece quando a escrita mudou o estado; item do diálogo é indexado por id; checkbox e texto formam um único nó `toggleable` para o TalkBack, com botão "Editar" separado. Os dois testes/asserções novos desta revisão (`undoIsRefusedWhenTheTaskIsFull`, asserção de `setChecklistItemChecked` e de item de tarefa excluída) **não foram executados** após a correção; o caso de salvar texto pendente não tem teste automatizado (UI Compose).
 
 ### Implementação (WP5)
 
@@ -36,7 +38,7 @@ Sem integração com transportadoras, lojas ou APIs (o app não tem `INTERNET`).
 - Conteúdo: título = nome da categoria; contadores "N ativas · M atrasadas"; seções Atrasadas, Com prazo (por data), Sem prazo, Concluídas (recolhida). Campo de busca restrito à categoria (`SearchRules.matchesTask` + filtro de categoria).
 - "+" cria "Nova tarefa" com a categoria pré-preenchida.
 - Correspondência de categoria por `SearchRules.fold` (ignora acento/maiúsculas), igual à unicidade de `CategoryRules`.
-- Regra pura em `domain/`: `CategoryRules.overview(tasks, category, nowMillis, zone): CategoryOverview`.
+- Regra pura em `domain/`: `CategoryRules.overview(tasks, category, nowMillis): CategoryOverview` (sem `zone`: atrasada é comparada por instante, e a ordenação não agrupa por dia).
 
 ## 2. Filtro por categoria na aba Tarefas
 
@@ -63,7 +65,8 @@ Evidência: `:app:testDebugUnitTest` (115 testes, 0 falhas) em 2026-11-20, JBR d
 - [x] `CategoryRules.overview` testado (acentos/maiúsculas, atrasadas, agendadas, sem prazo, concluídas em ordem de conclusão): `CategoryRulesTest`.
 - [~] Filtro por chips combina com filtros existentes: os chips e a combinação já existem na aba Tarefas (SPEC 007, código lido, não coberto por teste de UI). Não verificado em tela.
 - [x] Sugestões não duplicam nomes existentes, sem diferença de acento/maiúscula: `CategoryRulesTest.suggestions`. O cadastro usa o mesmo `CategoryRules.validateName` de antes.
-- [~] Checklist: adicionar/marcar/reordenar/excluir com tombstone, cópia desmarcada na próxima ocorrência, busca e backup. A busca está coberta por `ChecklistRulesTest`. Adicionar/marcar/editar/mover/excluir/desfazer, o limite de 100 itens e a cópia da recorrência estão em `ChecklistRepositoryTest` (5 testes, **compilados, NÃO executados**). O backup ida e volta com itens é coberto pela SPEC 012 (não reexecutado aqui).
+- [x] Checklist: adicionar/marcar/reordenar/excluir com tombstone, cópia desmarcada na próxima ocorrência, busca. Busca: `ChecklistRulesTest`. Adicionar/marcar/editar/mover/excluir/desfazer, limite e cópia da recorrência: `ChecklistRepositoryTest`, **EXECUTADO** no emulador API 37 em 2026-11-20 (reportado pelo coordenador; 61/61 na rodada, antes da revisão).
+- [~] Backup ida e volta com itens: coberto pela SPEC 012 (`BackupServiceTest`), não reexecutado nesta etapa.
 - [ ] Manual: lista de compras com 20 itens no Moto G84 com teclado aberto; TalkBack lê "arroz, marcado". NÃO FEITO.
 
 ## Fora de escopo

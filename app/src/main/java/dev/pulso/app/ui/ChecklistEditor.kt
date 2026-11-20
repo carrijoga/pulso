@@ -1,21 +1,23 @@
 package dev.pulso.app.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -35,8 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
@@ -49,6 +49,7 @@ data class ChecklistRow(val id: String, val text: String, val checked: Boolean)
 
 /** Where checklist edits go: a saved task writes through the ViewModel, a new task edits its draft. */
 interface ChecklistHandler {
+    /** [done] runs once the item is stored (or refused), so the caller can wait for it. */
     fun add(text: String, done: (Throwable?) -> Unit)
     fun setChecked(id: String, checked: Boolean)
     fun edit(id: String, text: String, done: (Throwable?) -> Unit)
@@ -100,10 +101,18 @@ fun PulsoViewModel.checklistHandler(task: TaskItem): ChecklistHandler = object :
     override fun delete(id: String) = deleteChecklistItem(id)
 }
 
-/** Checklist block of the task editor (SPEC 013 §4): add (keeps focus), check, edit, move and delete. */
+/**
+ * Checklist block of the task editor (SPEC 013 §4): add (keeps focus), check, edit, move and delete.
+ * [pending] is the text typed in "Adicionar item"; it is hoisted so the editor can add it on Salvar.
+ */
 @Composable
-fun ChecklistSection(rows: List<ChecklistRow>, checkable: Boolean, handler: ChecklistHandler) {
-    var newText by rememberSaveable { mutableStateOf("") }
+fun ChecklistSection(
+    rows: List<ChecklistRow>,
+    checkable: Boolean,
+    handler: ChecklistHandler,
+    pending: String,
+    onPendingChange: (String) -> Unit,
+) {
     var error by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<ChecklistRow?>(null) }
     val focus = remember { FocusRequester() }
@@ -117,40 +126,49 @@ fun ChecklistSection(rows: List<ChecklistRow>, checkable: Boolean, handler: Chec
         style = MaterialTheme.typography.labelLarge,
     )
     rows.forEach { row ->
+        val textColor = if (row.checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+        val decoration = if (row.checked) TextDecoration.LineThrough else null
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (checkable) Checkbox(row.checked, { handler.setChecked(row.id, it) },
-                modifier = Modifier.semantics { contentDescription = row.text })
-            Text(row.text,
-                Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Editar item") { editing = row }
-                    .padding(vertical = 12.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (row.checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                textDecoration = if (row.checked) TextDecoration.LineThrough else null)
+            // One node for TalkBack: the checkbox state and the text are read together as "arroz, marcado".
+            val toggle = if (checkable) Modifier.weight(1f).heightIn(min = 48.dp).toggleable(
+                value = row.checked, role = Role.Checkbox, onValueChange = { handler.setChecked(row.id, it) })
+            else Modifier.weight(1f).heightIn(min = 48.dp)
+            Row(toggle, verticalAlignment = Alignment.CenterVertically) {
+                if (checkable) {
+                    Checkbox(row.checked, null) // visual only: the row carries the state and the click
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(row.text, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+                    color = textColor, textDecoration = decoration)
+            }
+            IconButton(onClick = { editing = row }) {
+                Icon(Icons.Rounded.Edit, contentDescription = "Editar ${row.text}")
+            }
         }
     }
     fun submit() {
-        if (newText.isBlank()) return
-        handler.add(newText) { failure ->
-            if (failure == null) { newText = ""; error = null } else error = failure.message
+        if (pending.isBlank()) return
+        handler.add(pending) { failure ->
+            if (failure == null) { onPendingChange(""); error = null } else error = failure.message
         }
         focus.requestFocus()
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(newText, { if (it.length <= ChecklistRules.MAX_TEXT) newText = it },
+        OutlinedTextField(pending, { if (it.length <= ChecklistRules.MAX_TEXT) onPendingChange(it) },
             label = { Text("Adicionar item") }, singleLine = true,
             modifier = Modifier.weight(1f).focusRequester(focus),
             // Done adds the item and keeps the field focused, so a list can be typed line by line.
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }))
-        IconButton(onClick = ::submit, enabled = newText.isNotBlank()) {
+        IconButton(onClick = ::submit, enabled = pending.isNotBlank()) {
             Icon(Icons.Rounded.Add, contentDescription = "Adicionar item")
         }
     }
     error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
     editing?.let { row ->
-        val index = rows.indexOf(row)
+        val index = rows.indexOfFirst { it.id == row.id }
         var text by remember(row.id) { mutableStateOf(row.text) }
         var editError by remember(row.id) { mutableStateOf<String?>(null) }
         AlertDialog(onDismissRequest = { editing = null }, title = { Text("Item da lista") },

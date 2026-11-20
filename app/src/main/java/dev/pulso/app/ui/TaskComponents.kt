@@ -240,6 +240,10 @@ fun TaskEditorDialog(
     val draftLines = rememberSaveable(saver = DraftChecklistSaver) {
         mutableStateListOf<String>().apply { addAll(initial.checklist) }
     }
+    val draftHandler = remember { DraftChecklist(draftLines) }
+    // Saved tasks write their items through the ViewModel; a new task keeps them in the draft.
+    val itemHandler: ChecklistHandler = checklistHandler?.takeIf { existing != null } ?: draftHandler
+    var pendingItem by rememberSaveable { mutableStateOf("") }
 
     fun pickTime(date: LocalDate, current: LocalTime) {
         TimePickerDialog(context, { _, hour, minute ->
@@ -250,9 +254,15 @@ fun TaskEditorDialog(
     fun save() {
         if (busy || text.isBlank()) return
         busy = true
-        onSave(TaskDraft(text, notes, category, priority, dueAt, links, recurrence, draftLines.toList())) { failure ->
+        fun persist() = onSave(TaskDraft(text, notes, category, priority, dueAt, links, recurrence, draftLines.toList())) { failure ->
             busy = false
             error = failure?.message
+        }
+        // Text typed in "Adicionar item" but not confirmed with Done is stored with the task, not lost.
+        val line = pendingItem.trim()
+        if (line.isEmpty()) persist()
+        else itemHandler.add(line) { failure ->
+            if (failure == null) { pendingItem = ""; persist() } else { busy = false; error = failure.message }
         }
         if (dueAt != null && notificationAccess == NotificationAccess.NOT_REQUESTED) onRequestNotifications()
     }
@@ -381,11 +391,10 @@ fun TaskEditorDialog(
                 }
                 if (existing != null && checklistHandler != null) {
                     ChecklistSection(savedItems.map { ChecklistRow(it.id, it.text, it.checked) },
-                        checkable = true, handler = checklistHandler)
+                        checkable = true, handler = checklistHandler, pending = pendingItem, onPendingChange = { pendingItem = it })
                 } else {
-                    val draft = remember { DraftChecklist(draftLines) }
                     ChecklistSection(draftLines.mapIndexed { index, line -> ChecklistRow("$index", line, false) },
-                        checkable = false, handler = draft)
+                        checkable = false, handler = draftHandler, pending = pendingItem, onPendingChange = { pendingItem = it })
                 }
                 if (entries.isNotEmpty()) RescheduleHistory(entries, zone)
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)

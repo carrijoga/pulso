@@ -117,14 +117,16 @@ class PulsoViewModel(
     }
     /** [task] is the state before the change: checking the last open item suggests completing the task. */
     fun setChecklistItemChecked(task: TaskItem, itemId: String, checked: Boolean) = execute(failureMessage = true) {
-        repository.setChecklistItemChecked(itemId, checked)
-        if (checked && !task.isCompleted && ChecklistRules.isLastUnchecked(task.checklist, itemId)) {
+        val changed = repository.setChecklistItemChecked(itemId, checked)
+        if (changed && checked && !task.isCompleted && ChecklistRules.isLastUnchecked(task.checklist, itemId)) {
             _messages.tryEmit(UiMessage("Todos os itens marcados. Concluir tarefa?", "Concluir") { complete(task.id, true) })
         }
     }
     fun deleteChecklistItem(itemId: String) = execute(failureMessage = true) {
         repository.deleteChecklistItem(itemId)
-        _messages.tryEmit(UiMessage("Item removido.", "Desfazer") { execute { repository.restoreChecklistItem(itemId) } })
+        _messages.tryEmit(UiMessage("Item removido.", "Desfazer") {
+            execute(failureMessage = true) { repository.restoreChecklistItem(itemId) }
+        })
     }
 
     fun themeMode(mode: ThemeMode) = execute { preferences.setThemeMode(mode) }
