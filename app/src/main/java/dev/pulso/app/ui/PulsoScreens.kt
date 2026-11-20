@@ -40,6 +40,8 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CalendarViewWeek
+import androidx.compose.material.icons.outlined.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Home
@@ -84,6 +86,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -129,13 +132,15 @@ private enum class Tab(val label: String, val selectedIcon: ImageVector, val ico
     TODAY("Hoje", Icons.Rounded.Home, Icons.Outlined.Home),
     INBOX("Entrada", Icons.Rounded.Inbox, Icons.Outlined.Inbox),
     TASKS("Tarefas", Icons.Rounded.TaskAlt, Icons.Outlined.TaskAlt),
+    WEEK("Semana", Icons.Rounded.CalendarViewWeek, Icons.Outlined.CalendarViewWeek),
     SETTINGS("Ajustes", Icons.Rounded.Settings, Icons.Outlined.Settings),
 }
 private enum class Overlay(val title: String) { SEARCH("Buscar"), REVIEW("Revisão semanal"), HABITS("Hábitos") }
 
 /** Which editor sheet is open. Stored as ids so it survives rotation and follows Room updates. */
 private sealed interface Editor {
-    data object NewTask : Editor
+    /** [day] pre-fills the due date at the default time (the "+" of the Semana tab). */
+    data class NewTask(val day: LocalDate? = null) : Editor
     data class Edit(val taskId: String) : Editor
     data class Organize(val inboxId: String) : Editor
 }
@@ -158,9 +163,12 @@ fun PulsoScreens(vm: PulsoViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     var overlay by rememberSaveable { mutableStateOf<Overlay?>(null) }
     var editorKey by rememberSaveable { mutableStateOf<String?>(null) }
+    // Day in focus on the Semana tab (epoch day); the "+" creates a task on it.
+    var weekFocus by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
     val editor: Editor? = editorKey?.let { key ->
         when {
-            key == "new" -> Editor.NewTask
+            key == "new" -> Editor.NewTask()
+            key.startsWith("new:") -> Editor.NewTask(LocalDate.parse(key.removePrefix("new:")))
             key.startsWith("edit:") -> Editor.Edit(key.removePrefix("edit:"))
             key.startsWith("organize:") -> Editor.Organize(key.removePrefix("organize:"))
             else -> null
@@ -220,14 +228,16 @@ fun PulsoScreens(vm: PulsoViewModel) {
         floatingActionButton = {
             AnimatedVisibility(overlay == null && tab != Tab.SETTINGS,
                 enter = scaleIn(PulsoMotion.bouncy()) + fadeIn(), exit = scaleOut() + fadeOut()) {
-                val newTask = tab == Tab.TASKS
+                val newTask = tab == Tab.TASKS || tab == Tab.WEEK
                 val fabLabel = if (newTask) "Nova tarefa" else "Capturar"
                 ExtendedFloatingActionButton(
                     // The FAB's inner text is not exposed to accessibility (seen with TalkBack on the Moto G84),
                     // so the label goes on the button itself.
                     modifier = Modifier.semantics { contentDescription = fabLabel },
                     onClick = {
-                        if (newTask) editorKey = "new"
+                        // Never a day before today, even if the focus is stale (the Semana tab also resets it on entry).
+                        if (tab == Tab.WEEK) editorKey = "new:${maxOf(LocalDate.ofEpochDay(weekFocus), LocalDate.now())}"
+                        else if (newTask) editorKey = "new"
                         else context.startActivity(Intent(context, CaptureActivity::class.java))
                     },
                     expanded = fabExpanded,
@@ -285,6 +295,9 @@ fun PulsoScreens(vm: PulsoViewModel) {
                         onOpenInbox = { tab = Tab.INBOX }, onOpenTasks = { tab = Tab.TASKS })
                     Tab.INBOX.name -> InboxScreen(state.inbox, vm, actions, listStates.getValue(Tab.INBOX))
                     Tab.TASKS.name -> TaskScreen(state, actions, listStates.getValue(Tab.TASKS))
+                    Tab.WEEK.name -> WeekScreen(state, habitState, habitVm, actions, listStates.getValue(Tab.WEEK),
+                        focusDay = LocalDate.ofEpochDay(weekFocus), onFocusDay = { weekFocus = it.toEpochDay() },
+                        onReschedule = vm::reschedule, onOpenTasks = { tab = Tab.TASKS })
                     else -> Column(Modifier.padding(horizontal = 16.dp)) {
                         SettingsScreen(state, vm, notifications, onOpenHabits = { overlay = Overlay.HABITS })
                     }
@@ -306,7 +319,9 @@ fun PulsoScreens(vm: PulsoViewModel) {
             onEndSeries = existing?.takeIf { it.recurrence != null && !it.isCompleted }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } })
     }
     when (editor) {
-        Editor.NewTask -> common(TaskDraft(title = ""), "Nova tarefa", null) { draft, done ->
+        is Editor.NewTask -> common(TaskDraft(title = "", dueAt = editor.day?.let {
+                TaskRules.dueAtFor(it, state.settings.defaultDueTime, ZoneId.systemDefault()) }),
+                "Nova tarefa", null) { draft, done ->
             vm.create(draft) { failure -> if (failure == null) dismiss(); done(failure) }
         }
         is Editor.Edit -> {

@@ -63,6 +63,14 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
         ) { execute { repository.setChecked(habit.id, date, !checked) } })
     }
 
+    /** Checks a day of the week view (SPEC 010). The repository refuses days outside [HabitRules.canCheck]. */
+    fun setChecked(habit: Habit, date: LocalDate, checked: Boolean) = execute(failureMessage = true) {
+        if (!repository.setChecked(habit.id, date, checked)) return@execute
+        _messages.tryEmit(UiMessage(
+            if (checked) "${habit.name} marcado como feito." else "${habit.name} desmarcado.", "Desfazer",
+        ) { execute { repository.setChecked(habit.id, date, !checked) } })
+    }
+
     private fun execute(done: (Throwable?) -> Unit = {}, failureMessage: Boolean = false, action: suspend () -> Unit) {
         viewModelScope.launch {
             val failure = try { action(); null }
