@@ -45,6 +45,7 @@ Plano, pacotes de trabalho e decisões pendentes: [`docs/PLANO-M1.5.md`](PLANO-M
 
 - [ ] Widgets múltiplos e configuráveis (lista "Somente hoje", quantidade de itens) e widget de anotação rápida para a Entrada; antes, reproduzir o relato de corte/rolagem no Moto G84 — [SPEC 014](specs/014-widgets-configuraveis.md).
 - [x] Subtarefas: decidido em 2026-11-20 por hierarquia de um nível (ADR 0009, SPEC 015); implementação no M1.5 (WP6), ver acima.
+- [x] Ajustes como índice de subpáginas (Aparência, Lembretes, Categorias, Backup, Privacidade, Sobre; Widgets e Sincronização como marcadores "Em breve"; hábitos só pela tela Hoje) — [SPEC 016](specs/016-ajustes.md).
 
 ## M2 — Sincronização em nuvem
 
