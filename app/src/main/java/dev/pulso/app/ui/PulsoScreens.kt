@@ -235,7 +235,8 @@ fun PulsoScreens(vm: PulsoViewModel) {
                     // so the label goes on the button itself.
                     modifier = Modifier.semantics { contentDescription = fabLabel },
                     onClick = {
-                        if (tab == Tab.WEEK) editorKey = "new:${LocalDate.ofEpochDay(weekFocus)}"
+                        // Never a day before today, even if the focus is stale (the Semana tab also resets it on entry).
+                        if (tab == Tab.WEEK) editorKey = "new:${maxOf(LocalDate.ofEpochDay(weekFocus), LocalDate.now())}"
                         else if (newTask) editorKey = "new"
                         else context.startActivity(Intent(context, CaptureActivity::class.java))
                     },

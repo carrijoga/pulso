@@ -126,9 +126,23 @@ class WeekRulesTest {
         val active = task("a", anchor, seriesId = "s", rule = rule, anchor = anchor)
         val week = build(listOf(active))
         assertTrue(week.day(monday).projected.isEmpty())
-        assertEquals(1, week.day(LocalDate.of(2026, 11, 18)).projected.size)
+        // Wednesday is already past when "now" is Thursday 10:00.
+        assertTrue(week.day(LocalDate.of(2026, 11, 18)).projected.isEmpty())
         assertEquals(1, week.day(LocalDate.of(2026, 11, 20)).projected.size)
         assertTrue(week.day(LocalDate.of(2026, 11, 21)).projected.isEmpty())
+    }
+
+    @Test
+    fun overdueOpenOccurrenceProjectsOnlyFromNowOn() {
+        // Daily 09:00; the open occurrence is Monday (overdue); now is Thursday 10:00.
+        val anchor = at("2026-11-16", "09:00")
+        val overdue = task("a", at("2026-11-16", "09:00"), seriesId = "s", rule = daily, anchor = anchor)
+        val week = build(listOf(overdue))
+        assertTrue(week.days.filter { it.date < LocalDate.of(2026, 11, 20) }.all { it.projected.isEmpty() })
+        assertEquals(at("2026-11-20", "09:00"), week.day(LocalDate.of(2026, 11, 20)).projected.single().dueAt)
+        // Thursday 09:00 is already past at 10:00: no projection for it either.
+        assertTrue(week.day(LocalDate.of(2026, 11, 19)).projected.isEmpty())
+        assertTrue("projections never land before today", week.days.none { it.date < LocalDate.of(2026, 11, 19) && it.projected.isNotEmpty() })
     }
 
     @Test

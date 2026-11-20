@@ -19,7 +19,9 @@
 
 ## Limitações conhecidas
 
-- "Hoje" em Atrasadas mantém a hora da tarefa (`TaskRules.rescheduleFromToday`): se essa hora já passou, ela volta a aparecer como atrasada.
+- "Hoje" em Atrasadas mantém a hora da tarefa (`TaskRules.rescheduleFromToday`). Se essa hora já passou, a tarefa fica listada em Hoje com a hora passada e o cartão mostra "Atrasada"; ela não volta para a seção de atrasadas, que é por dia.
+- Projeções seguem o mesmo limiar de `RecurrenceRules.nextDueAt`: nada com `due <= max(ocorrência aberta, agora)` e nada antes de hoje. O "agora" da grade atualiza quando o dia muda (ON_RESUME) ou a tela recompõe; não há relógio contínuo.
+- O foco da semana nunca fica antes de hoje: ao entrar na aba ou retomar o app, ele volta para hoje; o "+" usa o maior entre foco e hoje.
 - Projeção exige ocorrência aberta; série sem ocorrência aberta não aparece como previsto.
 - "Pular esta vez", arrastar e soltar, e lembretes de hábito ficam fora. Hábitos `TIMES_PER_WEEK` aparecem em todos os dias (qualquer dia conta).
 - Widget não mostra a semana.

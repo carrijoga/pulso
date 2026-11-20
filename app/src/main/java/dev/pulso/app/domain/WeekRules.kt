@@ -79,7 +79,7 @@ object WeekRules {
         val overdue = if (isCurrentWeek) {
             open.filter { task -> task.dueAt?.let { dayOf(it) < today } == true }.sortedBy { it.dueAt }
         } else emptyList()
-        val projections = projections(series, open, weekStart, zone)
+        val projections = projections(series, open, weekStart, today, nowMillis, zone)
         val doneKeys = checkins.map { it.habitId to it.date }.toSet()
         val scheduled = habits.filter { !it.archived }.sortedBy { it.position }
 
@@ -99,9 +99,14 @@ object WeekRules {
         return WeekView(overdue, views, tasks.count { !it.isCompleted && it.dueAt == null })
     }
 
-    /** Future occurrences inside the week, strictly after each series' open occurrence (never the same day). */
+    /**
+     * Future occurrences inside the week. Same threshold as [RecurrenceRules.nextDueAt]: nothing at or before
+     * `max(activeDueAt, now)`, and nothing before today. An overdue open occurrence therefore never gets
+     * projections on days already past.
+     */
     private fun projections(
-        series: List<TaskSeries>, open: List<TaskItem>, weekStart: LocalDate, zone: ZoneId,
+        series: List<TaskSeries>, open: List<TaskItem>, weekStart: LocalDate, today: LocalDate,
+        nowMillis: Long, zone: ZoneId,
     ): Map<LocalDate, List<ProjectedOccurrence>> {
         val weekEnd = weekStart.plusDays(6)
         val result = mutableMapOf<LocalDate, MutableList<ProjectedOccurrence>>()
@@ -110,13 +115,14 @@ object WeekRules {
             val active = open.filter { it.seriesId == item.id }.minByOrNull { it.dueAt ?: Long.MAX_VALUE } ?: continue
             val activeDueAt = active.dueAt ?: continue
             val activeDay = Instant.ofEpochMilli(activeDueAt).atZone(zone).toLocalDate()
-            val from = maxOf(weekStart, activeDay.plusDays(1))
+            val threshold = maxOf(activeDueAt, nowMillis)
+            val from = maxOf(weekStart, activeDay.plusDays(1), today)
             if (from > weekEnd) continue
             val fromMillis = from.atStartOfDay(zone).toInstant().toEpochMilli()
             val toMillis = weekEnd.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
             RecurrenceRules.occurrencesBetween(item.rule, item.anchorDueAt, fromMillis, toMillis, zone).forEach { due ->
                 val day = Instant.ofEpochMilli(due).atZone(zone).toLocalDate()
-                if (day in from..weekEnd) {
+                if (due > threshold && day in from..weekEnd) {
                     result.getOrPut(day) { mutableListOf() }.add(ProjectedOccurrence(item.id, active.id, active.title, due))
                 }
             }

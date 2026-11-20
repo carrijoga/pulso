@@ -35,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,13 +103,17 @@ fun WeekScreen(
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    val now = System.currentTimeMillis()
+    // The focus never sits before today: entering the tab or resuming after midnight moves it to today.
+    LaunchedEffect(today) { if (focusDay < today) onFocusDay(today) }
     val fallbackTime = state.settings.defaultDueTime
     val weekStart = WeekRules.weekStart(focusDay)
-    val week = WeekRules.build(state.tasks, WeekRules.seriesOf(state.tasks), habits.habits, habits.checkins,
-        weekStart, now, zone)
-    val habitById = habits.habits.associateBy { it.id }
-    val tasksById = state.tasks.associateBy { it.id }
+    // Rebuilt when the day changes (today is re-read on resume). Time-of-day only refreshes on recomposition.
+    val week = remember(state.tasks, habits, weekStart, today) {
+        WeekRules.build(state.tasks, WeekRules.seriesOf(state.tasks), habits.habits, habits.checkins,
+            weekStart, System.currentTimeMillis(), zone)
+    }
+    val habitById = remember(habits.habits) { habits.habits.associateBy { it.id } }
+    val tasksById = remember(state.tasks) { state.tasks.associateBy { it.id } }
     var showDone by rememberSaveable { mutableStateOf(true) }
     // Id of the task whose "Mover para…" dialog is open; kept as text so it survives rotation.
     var movingId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -122,7 +130,7 @@ fun WeekScreen(
                 weekStart = weekStart,
                 onPrevious = { onFocusDay(focusDay.minusWeeks(1)) },
                 onNext = { onFocusDay(focusDay.plusWeeks(1)) },
-                onToday = { onFocusDay(today) },
+                onToday = { onFocusDay(LocalDate.now(zone)) },
             )
         }
         item(key = "show-done") {
@@ -137,12 +145,12 @@ fun WeekScreen(
                     Row(Modifier.padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         // Keeps the task's time (TaskRules.rescheduleFromToday), so a time already past reads as overdue again.
                         TextButton(
-                            onClick = { onReschedule(task.id, TaskRules.rescheduleFromToday(task.dueAt, 0L, now, zone, fallbackTime)) },
+                            onClick = { onReschedule(task.id, TaskRules.rescheduleFromToday(task.dueAt, 0L, System.currentTimeMillis(), zone, fallbackTime)) },
                             modifier = Modifier.minimumInteractiveComponentSize()
                                 .semantics { contentDescription = "Reagendar ${task.title} para hoje" },
                         ) { Text("Hoje") }
                         TextButton(
-                            onClick = { onReschedule(task.id, TaskRules.rescheduleFromToday(task.dueAt, 1L, now, zone, fallbackTime)) },
+                            onClick = { onReschedule(task.id, TaskRules.rescheduleFromToday(task.dueAt, 1L, System.currentTimeMillis(), zone, fallbackTime)) },
                             modifier = Modifier.minimumInteractiveComponentSize()
                                 .semantics { contentDescription = "Reagendar ${task.title} para amanhã" },
                         ) { Text("Amanhã") }
@@ -156,7 +164,9 @@ fun WeekScreen(
             }
             if (day.habits.isNotEmpty()) item(key = "habits-${day.date}") {
                 HabitMarks(day.habits, day.date) { mark, checked ->
-                    habitById[mark.habitId]?.let { habitVm.setChecked(it, day.date, checked) }
+                    // The row for today checks the day as it is at the click, even if midnight passed meanwhile.
+                    val target = if (day.date == today) LocalDate.now(zone) else day.date
+                    habitById[mark.habitId]?.let { habitVm.setChecked(it, target, checked) }
                 }
             }
             items(day.active, key = { "a-${day.date}-${it.id}" }) { task ->
@@ -229,10 +239,14 @@ private fun DayHeader(day: DayView, focused: Boolean, onFocus: () -> Unit) {
     val count = day.active.size + day.completed.size + day.projected.size
     val summary = when (count) { 0 -> "livre"; 1 -> "1 tarefa"; else -> "$count tarefas" }
     val longName = day.date.format(dayLong).replaceFirstChar { it.titlecase(PtBr) }
+    val announcement = "$longName${if (day.isToday) ", hoje" else ""}, $summary"
     Row(
         Modifier.fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onFocus)
-            .semantics { contentDescription = "$longName, $summary" }
+            .clickable(role = Role.Button, onClickLabel = "Definir como dia do +", onClick = onFocus)
+            .semantics(mergeDescendants = true) {
+                heading()
+                contentDescription = announcement
+            }
             .padding(horizontal = 4.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -259,7 +273,9 @@ private fun HabitMarks(marks: List<HabitDayMark>, date: LocalDate, onCheck: (Hab
                     PulsoCheck(mark.done, { checked -> onCheck(mark, checked) },
                         label = if (mark.done) "Desmarcar ${mark.name} em $dateText" else "Marcar ${mark.name} em $dateText")
                 } else {
-                    Box(Modifier.size(48.dp).semantics {
+                    Box(Modifier.size(48.dp).semantics(mergeDescendants = true) {
+                        role = Role.Checkbox
+                        disabled()
                         contentDescription = "${mark.name} em $dateText: ${if (mark.done) "feito" else "não feito"}, fora do prazo de marcação"
                     }, contentAlignment = Alignment.Center) {
                         Icon(if (mark.done) Icons.Rounded.Check else Icons.Rounded.Remove, contentDescription = null,
