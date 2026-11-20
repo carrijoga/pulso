@@ -6,6 +6,8 @@ import dev.pulso.app.domain.HabitScheduleType
 import dev.pulso.app.domain.RecurrenceBasis
 import dev.pulso.app.domain.RecurrenceFrequency
 import dev.pulso.app.domain.SearchRules
+import dev.pulso.app.domain.SubtaskLink
+import dev.pulso.app.domain.SubtaskRules
 import dev.pulso.app.domain.TaskRules
 import org.json.JSONArray
 import org.json.JSONException
@@ -31,7 +33,8 @@ data class ImportSummary(
 /**
  * Portable local backup. Import is additive (same UUIDs are skipped), never destructive.
  * Version 2 adds task links/snooze, categories and reschedule history; version 3 adds recurrence series,
- * habits, check-ins and checklist items. Versions 1 and 2 still import.
+ * habits, check-ins and checklist items; version 4 adds the subtask link `parentId` (SPEC 015).
+ * Versions 1 to 3 still import (no `parentId`, so every task is independent).
  */
 class BackupService(
     private val database: PulsoDatabase,
@@ -64,7 +67,8 @@ class BackupService(
                     .put("dueAt", nullable(x.dueAt)).put("completedAt", nullable(x.completedAt))
                     .put("createdAt", x.createdAt).put("updatedAt", x.updatedAt)
                     .put("deletedAt", nullable(x.deletedAt)).put("links", x.links)
-                    .put("snoozedUntil", nullable(x.snoozedUntil)).put("seriesId", nullable(x.seriesId)))
+                    .put("snoozedUntil", nullable(x.snoozedUntil)).put("seriesId", nullable(x.seriesId))
+                    .put("parentId", nullable(x.parentId)))
             } })
             .put("categories", JSONArray().also { a -> categories.forEach { x ->
                 a.put(JSONObject().put("id", x.id).put("name", x.name).put("createdAt", x.createdAt)
@@ -109,10 +113,16 @@ class BackupService(
             // References must resolve inside the file or the local database; throwing here rolls everything back.
             val seriesIds = existingSeries + parsed.series.map { it.id }
             val habitIds = existingHabits + parsed.habits.map { it.id }
-            val taskIds = database.taskDao().allForBackup().map { it.id }.toSet() + parsed.tasks.map { it.id }
+            val localTasks = database.taskDao().allForBackup()
+            val taskIds = localTasks.map { it.id }.toSet() + parsed.tasks.map { it.id }
             require(parsed.tasks.all { it.seriesId == null || it.seriesId in seriesIds } &&
                 parsed.checkins.all { it.habitId in habitIds } &&
                 parsed.checklist.all { it.taskId in taskIds }) { "Backup inconsistente: referência ausente." }
+            // SPEC 015: one level, no cycles, parents that exist, no live subtask under a deleted mother.
+            SubtaskRules.importError(
+                local = localTasks.map { SubtaskLink(it.id, it.parentId, it.deletedAt != null) },
+                incoming = parsed.tasks.map { SubtaskLink(it.id, it.parentId, it.deletedAt != null) },
+            )?.let { throw IllegalArgumentException(it) }
 
             database.inboxDao().importUnseen(parsed.inbox)
             database.seriesDao().importUnseen(parsed.series)
@@ -199,7 +209,7 @@ class BackupService(
                     x.getString("category"), x.getString("priority"), x.longOrNull("dueAt"),
                     x.longOrNull("completedAt"), x.getLong("createdAt"), x.getLong("updatedAt"),
                     x.longOrNull("deletedAt"), x.optString("links", ""), x.longOrNull("snoozedUntil"),
-                    x.stringOrNull("seriesId"))
+                    x.stringOrNull("seriesId"), parentId = x.stringOrNull("parentId"))
             }
             val categories = categoriesArray.objects().map { x ->
                 CategoryEntity(x.getString("id"), x.getString("name"), x.getLong("createdAt"),
@@ -283,7 +293,7 @@ class BackupService(
 
     companion object {
         const val FORMAT = "pulso-backup"
-        const val CURRENT_VERSION = 3
+        const val CURRENT_VERSION = 4
         private const val MAX_ROWS = 50_000
         private const val MAX_HABIT_NAME = 60
         private const val MAX_CHECKLIST_TEXT = 200

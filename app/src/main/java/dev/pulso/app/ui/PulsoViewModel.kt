@@ -15,6 +15,7 @@ import dev.pulso.app.domain.ChecklistItem
 import dev.pulso.app.domain.ChecklistRules
 import dev.pulso.app.domain.InboxItem
 import dev.pulso.app.domain.RescheduleEntry
+import dev.pulso.app.domain.SubtaskRules
 import dev.pulso.app.domain.TaskDraft
 import dev.pulso.app.domain.TaskItem
 import dev.pulso.app.domain.TaskRules
@@ -74,18 +75,41 @@ class PulsoViewModel(
     fun edit(id: String, draft: TaskDraft, done: (Throwable?) -> Unit = {}) = execute(done) {
         repository.editTask(id, draft)
     }
-    fun complete(id: String, completed: Boolean) = execute(failureMessage = true) {
-        val next = repository.setCompleted(id, completed)
+    /**
+     * [completeSubtasks] (SPEC 015): "Sim" on the dialog of a mother with open subtasks. Completing the last
+     * open subtask suggests completing its mother (snackbar with an action; nothing is completed by itself).
+     */
+    fun complete(id: String, completed: Boolean, completeSubtasks: Boolean = false): Unit = execute(failureMessage = true) {
+        val before = state.value.tasks
+        val task = before.firstOrNull { it.id == id }
+        val parent = task?.parentId?.let { parentId -> before.firstOrNull { it.id == parentId } }
+        val withSubtasks = if (completeSubtasks && completed) task?.openSubtasks ?: 0 else 0
+        val next = repository.setCompleted(id, completed, completeSubtasks)
+        val undo: () -> Unit = { execute(failureMessage = true) { repository.setCompleted(id, false) } }
         if (next != null) {
             val due = next.dueAt?.let { TaskRules.dueLabel(it, System.currentTimeMillis(), ZoneId.systemDefault()).text }
             val text = if (due == null) "Concluída." else "Concluída. Próxima: $due"
-            _messages.tryEmit(UiMessage(text, "Desfazer") { execute(failureMessage = true) { repository.setCompleted(id, false) } })
+            _messages.tryEmit(UiMessage(text, "Desfazer", undo))
+        } else if (withSubtasks > 0) {
+            _messages.tryEmit(UiMessage("Concluída com ${subtasksText(withSubtasks)}.", "Desfazer", undo))
+        }
+        if (completed && task != null && parent != null && SubtaskRules.suggestCompletingParent(parent, task)) {
+            _messages.tryEmit(UiMessage("Todas as subtarefas concluídas. Concluir tarefa?", "Concluir") {
+                complete(parent.id, true)
+            })
         }
     }
 
     fun delete(id: String) = execute(failureMessage = true) {
+        val subtasks = state.value.tasks.firstOrNull { it.id == id }?.subtaskTotal ?: 0
         repository.deleteTask(id)
-        _messages.tryEmit(UiMessage("Tarefa excluída.", "Desfazer") { execute { repository.restoreTask(id) } })
+        val text = if (subtasks == 0) "Tarefa excluída." else "Tarefa e ${subtasksText(subtasks)} excluídas."
+        _messages.tryEmit(UiMessage(text, "Desfazer") { execute { repository.restoreTask(id) } })
+    }
+
+    /** SPEC 015: "Soltar" a subtarefa: it becomes an independent task (its own date, reminder and history stay). */
+    fun detachSubtask(subtask: TaskItem) = execute(failureMessage = true) {
+        repository.editTask(subtask.id, subtask.toDraft().copy(parentId = null))
     }
 
     fun endRecurrence(id: String) = execute(failureMessage = true) {
@@ -163,7 +187,10 @@ class PulsoViewModel(
     }
 }
 
-fun TaskItem.toDraft(): TaskDraft = TaskDraft(title, notes, category, priority, dueAt, links, recurrence)
+fun TaskItem.toDraft(): TaskDraft = TaskDraft(title, notes, category, priority, dueAt, links, recurrence, parentId = parentId)
+
+/** "1 subtarefa" / "3 subtarefas" in pt-BR. */
+internal fun subtasksText(count: Int): String = if (count == 1) "1 subtarefa" else "$count subtarefas"
 
 class PulsoViewModelFactory(private val container: AppContainer) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")

@@ -107,6 +107,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pulso.app.CaptureActivity
 import dev.pulso.app.domain.InboxItem
 import dev.pulso.app.domain.ReviewRules
+import dev.pulso.app.domain.SubtaskRules
 import dev.pulso.app.domain.SearchRules
 import dev.pulso.app.domain.TaskDraft
 import dev.pulso.app.domain.TaskItem
@@ -144,7 +145,7 @@ private enum class Overlay(val title: String) {
 /** Which editor sheet is open. Stored as ids so it survives rotation and follows Room updates. */
 private sealed interface Editor {
     /** [day] pre-fills the due date (Semana "+"); [category] pre-fills the category (category screen). */
-    data class NewTask(val day: LocalDate? = null, val category: String? = null) : Editor
+    data class NewTask(val day: LocalDate? = null, val category: String? = null, val parentId: String? = null) : Editor
     data class Edit(val taskId: String) : Editor
     data class Organize(val inboxId: String) : Editor
 }
@@ -175,6 +176,7 @@ fun PulsoScreens(vm: PulsoViewModel) {
             key == "new" -> Editor.NewTask()
             key.startsWith("newday:") -> Editor.NewTask(day = LocalDate.parse(key.removePrefix("newday:")))
             key.startsWith("newcat:") -> Editor.NewTask(category = key.removePrefix("newcat:"))
+            key.startsWith("newsub:") -> Editor.NewTask(parentId = key.removePrefix("newsub:"))
             key.startsWith("edit:") -> Editor.Edit(key.removePrefix("edit:"))
             key.startsWith("organize:") -> Editor.Organize(key.removePrefix("organize:"))
             else -> null
@@ -190,9 +192,11 @@ fun PulsoScreens(vm: PulsoViewModel) {
         habitVm.messages.collect { message -> showLatestMessage(snackbar, message) }
     }
     val notifications = rememberNotificationPermission(state.settings.notificationPromptShown, vm::notificationPromptShown)
+    // SPEC 015: a mother with open subtasks asks before it is completed (see SubtaskCompletionDialog).
+    var pendingParent by rememberSaveable { mutableStateOf<String?>(null) }
     val actions = ScreenActions(
         openTask = { editorKey = "edit:${it.id}" },
-        toggleTask = { task, done -> vm.complete(task.id, done) },
+        toggleTask = { task, done -> if (done && task.openSubtasks > 0) pendingParent = task.id else vm.complete(task.id, done) },
         organizeInbox = { editorKey = "organize:${it.id}" },
     )
     BackHandler(enabled = overlay != null) { overlay = null }
@@ -317,6 +321,13 @@ fun PulsoScreens(vm: PulsoViewModel) {
         }
     }
 
+    state.tasks.firstOrNull { it.id == pendingParent }?.takeIf { it.openSubtasks > 0 }?.let { parent ->
+        SubtaskCompletionDialog(parent,
+            onAll = { pendingParent = null; vm.complete(parent.id, true, completeSubtasks = true) },
+            onOnlyParent = { pendingParent = null; vm.complete(parent.id, true) },
+            onCancel = { pendingParent = null })
+    }
+
     val dismiss = { editorKey = null }
     val common = @Composable { initial: TaskDraft, title: String, existing: TaskItem?,
                                onSave: (TaskDraft, (Throwable?) -> Unit) -> Unit ->
@@ -330,12 +341,16 @@ fun PulsoScreens(vm: PulsoViewModel) {
             onEndSeries = existing?.takeIf { it.recurrence != null && !it.isCompleted }?.let { task -> { dismiss(); vm.endRecurrence(task.id) } },
             checklist = if (existing != null) remember(existing.id) { vm.checklist(existing.id) }
                 else remember { kotlinx.coroutines.flow.flowOf(emptyList()) },
-            checklistHandler = existing?.let { vm.checklistHandler(it) })
+            checklistHandler = existing?.let { vm.checklistHandler(it) },
+            parentCandidates = state.tasks.filter { it.parentId == null && !it.isCompleted && it.id != existing?.id },
+            subtasks = existing?.let { task -> state.tasks.filter { it.parentId == task.id } }.orEmpty(),
+            onOpenEditor = { editorKey = it }, onDetachSubtask = vm::detachSubtask)
     }
     when (editor) {
         is Editor.NewTask -> common(TaskDraft(title = "",
                 category = editor.category ?: TaskRules.DEFAULT_CATEGORY,
-                dueAt = editor.day?.let { TaskRules.dueAtFor(it, state.settings.defaultDueTime, ZoneId.systemDefault()) }),
+                dueAt = editor.day?.let { TaskRules.dueAtFor(it, state.settings.defaultDueTime, ZoneId.systemDefault()) },
+                parentId = editor.parentId),
                 "Nova tarefa", null) { draft, done ->
             vm.create(draft) { failure -> if (failure == null) dismiss(); done(failure) }
         }
@@ -622,8 +637,10 @@ private fun TaskScreen(state: PulsoUiState, actions: ScreenActions, listState: L
             EmptyState(Icons.Rounded.TaskAlt, "Nada por aqui",
                 if (query.isBlank()) "Nenhuma tarefa nessa visualização." else "Nada encontrado para \"${query.trim()}\".")
         }
-        items(results, key = { it.id }) { task ->
-            TaskCard(task, { done -> actions.toggleTask(task, done) }, { actions.openTask(task) }, Modifier.animateItem())
+        // Subtasks sit under their mother (indented) when the mother is in the list (SPEC 015).
+        items(SubtaskRules.groupForList(results), key = { it.task.id }) { row ->
+            TaskCard(row.task, { done -> actions.toggleTask(row.task, done) }, { actions.openTask(row.task) },
+                Modifier.animateItem().padding(start = if (row.indented) 24.dp else 0.dp))
         }
     }
 }

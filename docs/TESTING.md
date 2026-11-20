@@ -28,6 +28,10 @@ Use `am instrument` num aparelho/emulador com dados que importam: `connectedDebu
 - Schema não mudou (v3); migração e backup rodados como regressão.
 - **NÃO EXECUTADO:** Moto G84 (não usado nesta etapa).
 
+### WP6 / subtarefas, schema v4 (2026-11-20) — NÃO EXECUTADO
+
+Escrito e compilado (`compileDebugAndroidTestKotlin`), não executado: `MigrationTest` (3→4 com dados de v3; cadeia 1→4 pelo teste de todas as versões), `BackupServiceTest` (backup v4, rejeições do vínculo), `SubtaskRepositoryTest` (12 casos). Rodar no emulador API 37 com `am instrument` antes de instalar v4 no Moto G84.
+
 ### WP0 / schema v3 (2026-11-19, emulador API 37, `am instrument`)
 
 - Unitários: 22 passando (inclui `DaysOfWeekMaskTest`). Lint e `assembleDebug` OK (JBR 21).

@@ -11,6 +11,7 @@ import dev.pulso.app.domain.InboxStatus
 import dev.pulso.app.domain.RecurrenceRule
 import dev.pulso.app.domain.RecurrenceRules
 import dev.pulso.app.domain.RescheduleEntry
+import dev.pulso.app.domain.SubtaskRules
 import dev.pulso.app.domain.TaskDraft
 import dev.pulso.app.domain.TaskItem
 import dev.pulso.app.domain.TaskRules
@@ -35,8 +36,10 @@ interface TaskRepository {
     /**
      * Completes or reopens. Completing the open occurrence of a series creates the next one (SPEC 008)
      * and returns it; completing twice creates nothing. Reopening removes the untouched next occurrence.
+     * [completeSubtasks] (SPEC 015) also completes the open subtasks in the same transaction; reopening the
+     * mother reopens the subtasks completed with it.
      */
-    suspend fun setCompleted(id: String, completed: Boolean): TaskItem?
+    suspend fun setCompleted(id: String, completed: Boolean, completeSubtasks: Boolean = false): TaskItem?
     /** "Excluir só esta": deletes this occurrence; an open occurrence of a series generates the next one. */
     suspend fun deleteTask(id: String)
     /** "Encerrar repetição": deletes this open occurrence and ends its series. Completed ones are refused. */
@@ -96,12 +99,21 @@ class LocalTaskRepository(
     ) { tasks, series, items ->
         val bySeries = series.associateBy(SeriesEntity::id)
         val byTask = items.groupBy(ChecklistItemEntity::taskId)
+        // observeActiveAndCompleted returns live rows only: a mother's title and its subtasks come from this list.
+        val byId = tasks.associateBy { it.task.id }
+        val subtasksOf = tasks.filter { it.task.parentId != null }.groupBy { it.task.parentId!! }
         tasks.map { row ->
             val model = row.toModel().copy(checklist = byTask[row.task.id].orEmpty().map(ChecklistItemEntity::toModel))
             // A task whose series ended keeps its seriesId for history but shows no repetition.
             val seriesRow = row.task.seriesId?.let { bySeries[it] }
-            if (seriesRow == null) model
-            else model.copy(recurrence = seriesRow.toRule(), recurrenceAnchorDueAt = seriesRow.anchorDueAt)
+            val withSeries = if (seriesRow == null) model
+                else model.copy(recurrence = seriesRow.toRule(), recurrenceAnchorDueAt = seriesRow.anchorDueAt)
+            val children = subtasksOf[row.task.id].orEmpty()
+            withSeries.copy(
+                parentTitle = row.task.parentId?.let { byId[it]?.task?.title },
+                subtaskTotal = children.size,
+                subtaskDone = children.count { it.task.completedAt != null },
+            )
         }
     }
 
@@ -136,6 +148,7 @@ class LocalTaskRepository(
         database.withTransaction {
             val inbox = inboxDao.findById(id)
             if (inbox != null && inbox.status == InboxStatus.INBOX.name) {
+                checkSubtaskRules(taskId, validated.parentId, repeats = validated.recurrence != null)
                 val seriesId = createSeries(validated, timestamp)
                 taskDao.upsert(newTask(taskId, validated, timestamp, seriesId))
                 insertChecklist(taskId, validated.checklist, timestamp)
@@ -152,6 +165,7 @@ class LocalTaskRepository(
         val id = UUID.randomUUID().toString()
         val timestamp = now()
         database.withTransaction {
+            checkSubtaskRules(id, valid.parentId, repeats = valid.recurrence != null)
             val seriesId = createSeries(valid, timestamp)
             taskDao.upsert(newTask(id, valid, timestamp, seriesId))
             insertChecklist(id, valid.checklist, timestamp)
@@ -170,6 +184,7 @@ class LocalTaskRepository(
         id = id, title = draft.title, notes = draft.notes, category = draft.category,
         priority = draft.priority.name, dueAt = draft.dueAt, completedAt = null,
         createdAt = timestamp, updatedAt = timestamp, links = draft.links, seriesId = seriesId,
+        parentId = draft.parentId,
     )
 
     override suspend fun editTask(id: String, draft: TaskDraft) {
@@ -179,16 +194,33 @@ class LocalTaskRepository(
         val updated = database.withTransaction {
             val original = taskDao.findById(id) ?: return@withTransaction null
             if (original.deletedAt != null) return@withTransaction null
+            checkSubtaskRules(id, valid.parentId, repeats = rule != null)
             val dueChanged = original.dueAt != valid.dueAt
             if (dueChanged) recordReschedule(original, valid.dueAt, timestamp)
             val seriesId = syncSeries(original, valid, rule, timestamp)
             original.copy(title = valid.title, notes = valid.notes, category = valid.category,
                 priority = valid.priority.name, dueAt = valid.dueAt, links = valid.links,
                 snoozedUntil = if (dueChanged) null else original.snoozedUntil,
-                seriesId = seriesId, updatedAt = timestamp).also { taskDao.upsert(it) }
+                seriesId = seriesId, parentId = valid.parentId, updatedAt = timestamp).also { taskDao.upsert(it) }
         } ?: return
         notify(updated)
     }
+
+    /**
+     * SPEC 015 rules for the link and for repetition, checked before the write in the same transaction.
+     * [taskId] is the task being written; its live subtasks decide nothing for the link, only for the
+     * link refusal "tarefa com subtarefas não pode virar subtarefa".
+     */
+    private suspend fun checkSubtaskRules(taskId: String, parentId: String?, repeats: Boolean) {
+        val hasSubtasks = taskDao.countLiveChildren(taskId) > 0
+        val parent = parentId?.let { taskDao.findById(it) }?.let { row ->
+            SubtaskRules.Parent(row.id, isSubtask = row.parentId != null, deleted = row.deletedAt != null)
+        }
+        SubtaskRules.linkError(taskId, parentId, parent, hasSubtasks, taskRepeats = repeats)?.let(::refuse)
+        if (repeats) SubtaskRules.repeatError(isSubtask = parentId != null)?.let(::refuse)
+    }
+
+    private fun refuse(message: String): Nothing = throw IllegalArgumentException(message)
 
     override suspend fun reschedule(id: String, newDueAt: Long) {
         val timestamp = now()
@@ -217,7 +249,7 @@ class LocalTaskRepository(
         notify(updated)
     }
 
-    override suspend fun setCompleted(id: String, completed: Boolean): TaskItem? {
+    override suspend fun setCompleted(id: String, completed: Boolean, completeSubtasks: Boolean): TaskItem? {
         val timestamp = now()
         val mutation = database.withTransaction {
             val original = taskDao.findById(id)
@@ -227,13 +259,16 @@ class LocalTaskRepository(
             if (completed) {
                 val done = original.copy(completedAt = timestamp, snoozedUntil = null, updatedAt = timestamp)
                 taskDao.upsert(done)
-                val next = spawnNextOccurrence(done, timestamp)
-                Mutation(listOfNotNull(done, next), next)
+                // Copies of the subtasks are made before the originals are completed (copies always start open).
+                val spawned = spawnNextOccurrence(done, timestamp)
+                val subtasks = if (completeSubtasks) completeOpenChildren(id, timestamp) else emptyList()
+                Mutation(listOf(done) + spawned.changed() + subtasks, spawned?.next)
             } else {
                 val reopened = original.copy(completedAt = null, snoozedUntil = null, updatedAt = timestamp)
                 taskDao.upsert(reopened)
                 val removed = tombstoneUntouchedNext(reopened, generatedAt = original.completedAt, at = timestamp)
-                Mutation(listOfNotNull(reopened, removed))
+                val subtasks = reopenChildrenCompletedWith(id, original.completedAt, timestamp)
+                Mutation(listOf(reopened) + removed + subtasks)
             }
         }
         mutation.changed.forEach { notify(it) }
@@ -248,8 +283,13 @@ class LocalTaskRepository(
             val tombstone = original.copy(deletedAt = timestamp, updatedAt = timestamp)
             taskDao.upsert(tombstone)
             // Only an open occurrence generates a successor; deleting old history must not create one.
-            val next = if (original.completedAt == null) spawnNextOccurrence(tombstone, timestamp) else null
-            Mutation(listOfNotNull(tombstone, next), next)
+            // The successor copies the subtasks while they are still live: they are removed below.
+            val spawned = if (original.completedAt == null) spawnNextOccurrence(tombstone, timestamp) else null
+            // SPEC 015: the subtasks go with their mother in the same transaction; one undo restores them.
+            val subtasks = taskDao.liveChildren(id).map { child ->
+                child.copy(deletedAt = timestamp, updatedAt = timestamp).also { taskDao.upsert(it) }
+            }
+            Mutation(listOf(tombstone) + spawned.changed() + subtasks, spawned?.next)
         }
         mutation.changed.forEach { notify(it) }
     }
@@ -266,7 +306,10 @@ class LocalTaskRepository(
             }
             val tombstone = original.copy(deletedAt = timestamp, updatedAt = timestamp)
             taskDao.upsert(tombstone)
-            Mutation(listOf(tombstone))
+            val subtasks = taskDao.liveChildren(id).map { child ->
+                child.copy(deletedAt = timestamp, updatedAt = timestamp).also { taskDao.upsert(it) }
+            }
+            Mutation(listOf(tombstone) + subtasks)
         }
         mutation.changed.forEach { notify(it) }
     }
@@ -277,12 +320,16 @@ class LocalTaskRepository(
             val original = taskDao.findById(id)
             if (original == null || original.deletedAt == null) return@withTransaction Mutation.NONE
             // Only the series tombstoned by the same end (same instant) is revived.
-            original.seriesId?.let { seriesDao.findById(it) }?.takeIf { it.deletedAt == original.deletedAt }?.let { series ->
+            val endedAt = requireNotNull(original.deletedAt)
+            original.seriesId?.let { seriesDao.findById(it) }?.takeIf { it.deletedAt == endedAt }?.let { series ->
                 seriesDao.upsert(series.copy(deletedAt = null, updatedAt = timestamp))
             }
             val restored = original.copy(deletedAt = null, updatedAt = timestamp)
             taskDao.upsert(restored)
-            Mutation(listOf(restored))
+            val subtasks = taskDao.childrenDeletedAt(id, endedAt).map { child ->
+                child.copy(deletedAt = null, updatedAt = timestamp).also { taskDao.upsert(it) }
+            }
+            Mutation(listOf(restored) + subtasks)
         }
         mutation.changed.forEach { notify(it) }
     }
@@ -295,22 +342,33 @@ class LocalTaskRepository(
             val restored = original.copy(deletedAt = null, updatedAt = timestamp)
             taskDao.upsert(restored)
             val removed = tombstoneUntouchedNext(restored, generatedAt = original.deletedAt, at = timestamp)
-            Mutation(listOfNotNull(restored, removed))
+            // Only the subtasks removed with this mother (same instant); ones deleted earlier stay deleted.
+            val subtasks = taskDao.childrenDeletedAt(id, requireNotNull(original.deletedAt)).map { child ->
+                child.copy(deletedAt = null, updatedAt = timestamp).also { taskDao.upsert(it) }
+            }
+            Mutation(listOf(restored) + removed + subtasks)
         }
         mutation.changed.forEach { notify(it) }
     }
 
+    /** The next occurrence and copies of the subtasks made for it (SPEC 015 §7). */
+    private class Spawn(val next: TaskEntity, val subtasks: List<TaskEntity>)
+
+    private fun Spawn?.changed(): List<TaskEntity> = this?.let { listOf(it.next) + it.subtasks }.orEmpty()
+
     /**
      * Creates the next occurrence of [finished]'s series, unless another occurrence of that series is
      * still open (idempotency: widget + notification may both complete the same occurrence).
-     * Copies title, notes, category, priority, links and the checklist (unchecked). Must run in a transaction.
+     * Copies title, notes, category, priority, links and the checklist (unchecked), and the open copies of
+     * its live subtasks (SPEC 015 §7). Must run in a transaction.
      */
-    private suspend fun spawnNextOccurrence(finished: TaskEntity, at: Long): TaskEntity? {
+    private suspend fun spawnNextOccurrence(finished: TaskEntity, at: Long): Spawn? {
         val seriesId = finished.seriesId ?: return null
         val series = seriesDao.findById(seriesId)?.takeIf { it.deletedAt == null } ?: return null
         if (taskDao.findOpenBySeries(seriesId).any { it.id != finished.id }) return null
+        val currentDue = finished.dueAt ?: at
         val nextDue = RecurrenceRules.nextDueAt(series.toRule(), series.anchorDueAt,
-            currentDueAt = finished.dueAt ?: at, completedAt = at, nowMillis = at, zone = zone())
+            currentDueAt = currentDue, completedAt = at, nowMillis = at, zone = zone())
         val next = finished.copy(id = UUID.randomUUID().toString(), dueAt = nextDue, completedAt = null,
             snoozedUntil = null, createdAt = at, updatedAt = at, deletedAt = null)
         taskDao.upsert(next)
@@ -318,20 +376,61 @@ class LocalTaskRepository(
             checklistDao.upsert(item.copy(id = UUID.randomUUID().toString(), taskId = next.id,
                 checkedAt = null, createdAt = at, updatedAt = at, deletedAt = null))
         }
-        return next
+        val subtasks = taskDao.liveChildren(finished.id).map { child ->
+            copySubtask(child, next, oldMotherDue = currentDue, nextMotherDue = nextDue, at = at)
+        }
+        return Spawn(next, subtasks)
+    }
+
+    /**
+     * Open copy of a subtask for the next occurrence: new id, same content, due date shifted with the mother
+     * (same local days apart and time), unchecked checklist copy. Subtasks never repeat, so no series.
+     */
+    private suspend fun copySubtask(child: TaskEntity, nextMother: TaskEntity, oldMotherDue: Long,
+                                    nextMotherDue: Long, at: Long): TaskEntity {
+        val copy = child.copy(id = UUID.randomUUID().toString(), parentId = nextMother.id,
+            dueAt = child.dueAt?.let { SubtaskRules.shiftedDueAt(it, oldMotherDue, nextMotherDue, zone()) },
+            completedAt = null, snoozedUntil = null, seriesId = null,
+            createdAt = at, updatedAt = at, deletedAt = null)
+        taskDao.upsert(copy)
+        checklistDao.activeForTask(child.id).forEach { item ->
+            checklistDao.upsert(item.copy(id = UUID.randomUUID().toString(), taskId = copy.id,
+                checkedAt = null, createdAt = at, updatedAt = at, deletedAt = null))
+        }
+        return copy
     }
 
     /**
      * Undo (SPEC 008): removes the next occurrence created at [generatedAt] that nobody edited since
-     * (createdAt == updatedAt). An edited one is kept, so nothing the user wrote is lost.
+     * (createdAt == updatedAt), together with its untouched subtask copies (SPEC 015 §7). If the user edited
+     * the occurrence or any copy, nothing is removed, so nothing the user wrote is lost.
+     * Returns the rows tombstoned (empty when nothing was removed). Must run in a transaction.
      */
-    private suspend fun tombstoneUntouchedNext(occurrence: TaskEntity, generatedAt: Long?, at: Long): TaskEntity? {
-        val seriesId = occurrence.seriesId ?: return null
-        if (generatedAt == null) return null
+    private suspend fun tombstoneUntouchedNext(occurrence: TaskEntity, generatedAt: Long?, at: Long): List<TaskEntity> {
+        val seriesId = occurrence.seriesId ?: return emptyList()
+        if (generatedAt == null) return emptyList()
         val untouched = taskDao.findOpenBySeries(seriesId).firstOrNull {
             it.id != occurrence.id && it.createdAt == generatedAt && it.updatedAt == generatedAt
-        } ?: return null
-        return untouched.copy(deletedAt = at, updatedAt = at).also { taskDao.upsert(it) }
+        } ?: return emptyList()
+        val copies = taskDao.liveChildren(untouched.id)
+        if (copies.any { it.createdAt != generatedAt || it.updatedAt != generatedAt }) return emptyList()
+        return (listOf(untouched) + copies).map { row ->
+            row.copy(deletedAt = at, updatedAt = at).also { taskDao.upsert(it) }
+        }
+    }
+
+    /** SPEC 015: completes the open subtasks of [parentId] at [at]. Must run in a transaction. */
+    private suspend fun completeOpenChildren(parentId: String, at: Long): List<TaskEntity> =
+        taskDao.openChildren(parentId).map { child ->
+            child.copy(completedAt = at, snoozedUntil = null, updatedAt = at).also { taskDao.upsert(it) }
+        }
+
+    /** SPEC 015: undo of "Concluir também as subtarefas": reopens those completed at the mother's instant. */
+    private suspend fun reopenChildrenCompletedWith(parentId: String, completedAt: Long?, at: Long): List<TaskEntity> {
+        if (completedAt == null) return emptyList()
+        return taskDao.childrenCompletedAt(parentId, completedAt).map { child ->
+            child.copy(completedAt = null, snoozedUntil = null, updatedAt = at).also { taskDao.upsert(it) }
+        }
     }
 
     /**

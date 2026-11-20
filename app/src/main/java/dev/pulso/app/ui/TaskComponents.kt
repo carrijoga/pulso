@@ -51,6 +51,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.AccountTree
+import androidx.compose.material.icons.rounded.SubdirectoryArrowRight
 import androidx.compose.material.icons.rounded.Snooze
 import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material3.AlertDialog
@@ -91,6 +93,7 @@ import dev.pulso.app.domain.ChecklistItem
 import dev.pulso.app.domain.DueState
 import dev.pulso.app.domain.Priority
 import dev.pulso.app.domain.RecurrenceRules
+import dev.pulso.app.domain.SubtaskRules
 import dev.pulso.app.domain.RescheduleEntry
 import dev.pulso.app.domain.TaskDraft
 import dev.pulso.app.domain.TaskItem
@@ -144,6 +147,10 @@ fun TaskCard(task: TaskItem, onToggle: (Boolean) -> Unit, onOpen: () -> Unit, mo
                         val anchor = task.recurrenceAnchorDueAt ?: task.dueAt ?: now
                         MetaIcon(Icons.Rounded.Repeat, "Repete: ${RecurrenceRules.describe(rule, anchor, zone)}", null)
                     }
+                    task.parentTitle?.let { mother -> SubtaskLabel(mother) }
+                    if (task.subtaskTotal > 0) MetaIcon(Icons.Rounded.AccountTree,
+                        "${task.subtaskDone} de ${task.subtaskTotal} subtarefas concluídas",
+                        "${task.subtaskDone}/${task.subtaskTotal}")
                     if (task.checklist.isNotEmpty()) {
                         val checkedItems = task.checklist.count { it.checked }
                         MetaIcon(Icons.Rounded.Checklist, "Itens marcados: $checkedItems de ${task.checklist.size}",
@@ -184,6 +191,19 @@ private fun CategoryDot(category: String, alpha: Float) {
     }
 }
 
+/** "Subtarefa de <mãe>" on a subtask in any list (SPEC 015). One merged node for TalkBack. */
+@Composable
+private fun SubtaskLabel(mother: String) {
+    Row(Modifier.semantics(mergeDescendants = true) { contentDescription = "Subtarefa de $mother" },
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.SubdirectoryArrowRight, contentDescription = null, modifier = Modifier.size(15.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(3.dp))
+        Text("Subtarefa de $mother", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
 @Composable
 private fun MetaIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, text: String?,
                      tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant) {
@@ -220,6 +240,13 @@ fun TaskEditorDialog(
     /** Saved items of [existing] and their writes; a new task uses a draft list instead. */
     checklist: Flow<List<ChecklistItem>> = flowOf(emptyList()),
     checklistHandler: ChecklistHandler? = null,
+    /** Open tasks that can be the mother of this one (SPEC 015). */
+    parentCandidates: List<TaskItem> = emptyList(),
+    /** Live subtasks of [existing] (empty for a new task). */
+    subtasks: List<TaskItem> = emptyList(),
+    /** Opens another editor by key ("edit:<id>", "newsub:<id>") after this task is saved. */
+    onOpenEditor: ((String) -> Unit)? = null,
+    onDetachSubtask: ((TaskItem) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -230,6 +257,7 @@ fun TaskEditorDialog(
     var priority by rememberSaveable { mutableStateOf(initial.priority) }
     var dueAt by rememberSaveable { mutableStateOf(initial.dueAt) }
     var recurrence by rememberSaveable(stateSaver = RecurrenceSaver) { mutableStateOf(initial.recurrence) }
+    var parentChoice by rememberSaveable { mutableStateOf(initial.parentId) }
     var repeatOpen by rememberSaveable { mutableStateOf(false) }
     var newCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -251,18 +279,21 @@ fun TaskEditorDialog(
         }, current.hour, current.minute, DateFormat.is24HourFormat(context)).show()
     }
 
-    fun save() {
+    /** Saves, then runs [then] with the outcome: other editors open only after a successful save (SPEC 015). */
+    fun save(then: (Throwable?) -> Unit = {}) {
         if (busy || text.isBlank()) return
         busy = true
-        fun persist() = onSave(TaskDraft(text, notes, category, priority, dueAt, links, recurrence, draftLines.toList())) { failure ->
+        fun persist() = onSave(TaskDraft(text, notes, category, priority, dueAt, links, recurrence,
+            draftLines.toList(), parentId = parentChoice)) { failure ->
             busy = false
             error = failure?.message
+            then(failure)
         }
         // Text typed in "Adicionar item" but not confirmed with Done is stored with the task, not lost.
         val line = pendingItem.trim()
         if (line.isEmpty()) persist()
         else itemHandler.add(line) { failure ->
-            if (failure == null) { pendingItem = ""; persist() } else { busy = false; error = failure.message }
+            if (failure == null) { pendingItem = ""; persist() } else { busy = false; error = failure.message; then(failure) }
         }
         if (dueAt != null && notificationAccess == NotificationAccess.NOT_REQUESTED) onRequestNotifications()
     }
@@ -274,7 +305,7 @@ fun TaskEditorDialog(
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                 TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancelar") }
-                Button(enabled = !busy && text.isNotBlank(), onClick = ::save) { Text(if (busy) "Salvando…" else "Salvar") }
+                Button(enabled = !busy && text.isNotBlank(), onClick = { save() }) { Text(if (busy) "Salvando…" else "Salvar") }
             }
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()
                 .padding(horizontal = 24.dp).padding(top = 12.dp, bottom = 32.dp),
@@ -367,12 +398,15 @@ fun TaskEditorDialog(
                 val repeatAnchor = rule?.let { savedAnchor(it, existing, dueAt, System.currentTimeMillis()) }
                     ?: dueAt ?: System.currentTimeMillis()
                 val repeatLabel = rule?.let { RecurrenceRules.describe(it, repeatAnchor, zone) } ?: "Não repete"
-                OutlinedButton(onClick = { repeatOpen = true },
+                // A subtask cannot repeat (SPEC 015 §7): the button is off while a mother is chosen.
+                OutlinedButton(onClick = { repeatOpen = true }, enabled = parentChoice == null,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Icon(Icons.Rounded.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Repetir: $repeatLabel", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                if (parentChoice != null) Text("Subtarefa não repete. Solte-a da tarefa mãe para repetir.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (rule != null) {
                     Text(nextPreview(rule, repeatAnchor, zone), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -396,6 +430,18 @@ fun TaskEditorDialog(
                     ChecklistSection(draftLines.mapIndexed { index, line -> ChecklistRow("$index", line, false) },
                         checkable = false, handler = draftHandler, pending = pendingItem, onPendingChange = { pendingItem = it })
                 }
+                val pickerBlocked = when {
+                    subtasks.isNotEmpty() -> "Esta tarefa tem subtarefas, por isso não pode virar subtarefa."
+                    rule != null -> "Tarefa repetida não pode ser subtarefa. Remova a repetição antes."
+                    else -> null
+                }
+                ParentPicker(parentChoice, { parentChoice = it }, parentCandidates, pickerBlocked)
+                if (existing != null && existing.parentId == null) {
+                    SubtasksSection(subtasks,
+                        onAdd = { save { failure -> if (failure == null) onOpenEditor?.invoke("newsub:${existing.id}") } },
+                        onOpen = { child -> save { failure -> if (failure == null) onOpenEditor?.invoke("edit:${child.id}") } },
+                        onDetach = { child -> onDetachSubtask?.invoke(child) })
+                }
                 if (entries.isNotEmpty()) RescheduleHistory(entries, zone)
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 if (onDelete != null) {
@@ -414,7 +460,8 @@ fun TaskEditorDialog(
             text = {
                 Text(if (repeating) "\"${text.trim()}\" se repete. \"Excluir só esta\" remove esta ocorrência e mantém a próxima. " +
                     "\"Encerrar repetição\" remove esta ocorrência e não cria mais nenhuma."
-                else "\"${text.trim()}\" sai das listas. Você pode desfazer logo em seguida.")
+                else "\"${text.trim()}\" sai das listas.${existing?.subtaskTotal?.takeIf { it > 0 }
+                    ?.let { " Também saem ${subtasksText(it)}." }.orEmpty()} Você pode desfazer logo em seguida.")
             },
             confirmButton = {
                 // Stacked vertically so the labels do not overflow at 200% font size.
@@ -427,6 +474,73 @@ fun TaskEditorDialog(
                 }
             })
     }
+}
+
+/** "Subtarefa de…": one level only (SPEC 015). [blocked] explains why no mother can be chosen. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ParentPicker(choice: String?, onChoice: (String?) -> Unit, candidates: List<TaskItem>, blocked: String?) {
+    Text("Subtarefa de", style = MaterialTheme.typography.labelLarge)
+    if (blocked != null) {
+        Text(blocked, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(selected = choice == null, onClick = { onChoice(null) }, label = { Text("Nenhuma") })
+        candidates.forEach { mother ->
+            FilterChip(selected = choice == mother.id, onClick = { onChoice(mother.id) },
+                label = { Text(mother.title, maxLines = 1, overflow = TextOverflow.Ellipsis) })
+        }
+    }
+}
+
+/** Subtasks of a task, with progress, open/detach actions and "Adicionar subtarefa" (SPEC 015). */
+@Composable
+private fun SubtasksSection(subtasks: List<TaskItem>, onAdd: () -> Unit, onOpen: (TaskItem) -> Unit,
+                            onDetach: (TaskItem) -> Unit) {
+    Text("Subtarefas", style = MaterialTheme.typography.labelLarge)
+    if (subtasks.isNotEmpty()) {
+        Text("Progresso: ${SubtaskRules.progressLabel(subtasks.count { it.isCompleted }, subtasks.size)}",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        subtasks.forEach { child ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { onOpen(child) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                    Text(child.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        textDecoration = if (child.isCompleted) TextDecoration.LineThrough else null)
+                }
+                TextButton(onClick = { onDetach(child) }, modifier = Modifier.heightIn(min = 48.dp)
+                    .semantics { contentDescription = "Soltar ${child.title}" }) { Text("Soltar") }
+            }
+        }
+    }
+    OutlinedButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Adicionar subtarefa")
+    }
+}
+
+/**
+ * "Concluir também as N subtarefas?" (SPEC 015). "Sim" completes the mother and its open subtasks in one
+ * transaction; "Não" completes only the mother.
+ */
+@Composable
+internal fun SubtaskCompletionDialog(parent: TaskItem, onAll: () -> Unit, onOnlyParent: () -> Unit, onCancel: () -> Unit) {
+    val open = parent.openSubtasks
+    AlertDialog(onDismissRequest = onCancel,
+        title = { Text(if (open == 1) "Concluir também a subtarefa aberta?" else "Concluir também as $open subtarefas?") },
+        text = {
+            Text("Se escolher \"Sim\", elas também ficam concluídas. Com \"Não\", só \"${parent.title}\" é concluída " +
+                "e as subtarefas continuam abertas.")
+        },
+        confirmButton = {
+            // Stacked vertically so the labels do not overflow at 200% font size.
+            Column(horizontalAlignment = Alignment.End) {
+                Button(onClick = onAll) { Text("Sim, concluir todas") }
+                TextButton(onClick = onOnlyParent) { Text("Não, só a tarefa") }
+                TextButton(onClick = onCancel) { Text("Cancelar") }
+            }
+        })
 }
 
 @Composable

@@ -206,7 +206,8 @@ private fun TaskRow(context: Context, task: TaskItem, now: Long, zone: ZoneId) {
         ) {
             Image(ImageProvider(R.drawable.widget_ic_circle), contentDescription = null, modifier = GlanceModifier.size(20.dp))
         }
-        Text(task.title, maxLines = 1,
+        // A subtask shows its mother in parentheses (SPEC 015); the row height and tap targets do not change.
+        Text(task.parentTitle?.let { "${task.title} (${it})" } ?: task.title, maxLines = 1,
             modifier = GlanceModifier.defaultWeight(),
             style = TextStyle(color = onSurface, fontSize = 14.sp))
         if (due != null) {

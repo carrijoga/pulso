@@ -52,6 +52,25 @@ interface TaskDao {
     @Query("SELECT * FROM task_items")
     suspend fun allForBackup(): List<TaskEntity>
 
+    /** Live subtasks of a mother (SPEC 015). */
+    @Query("SELECT * FROM task_items WHERE parentId = :parentId AND deletedAt IS NULL")
+    suspend fun liveChildren(parentId: String): List<TaskEntity>
+
+    /** Open live subtasks of a mother: completing the mother with "Sim" completes exactly these. */
+    @Query("SELECT * FROM task_items WHERE parentId = :parentId AND deletedAt IS NULL AND completedAt IS NULL")
+    suspend fun openChildren(parentId: String): List<TaskEntity>
+
+    /** Subtasks tombstoned in the same instant as the mother (its "Excluir" undo restores exactly these). */
+    @Query("SELECT * FROM task_items WHERE parentId = :parentId AND deletedAt = :at")
+    suspend fun childrenDeletedAt(parentId: String, at: Long): List<TaskEntity>
+
+    /** Subtasks completed in the same instant as the mother (its "Concluir" undo reopens exactly these). */
+    @Query("SELECT * FROM task_items WHERE parentId = :parentId AND deletedAt IS NULL AND completedAt = :at")
+    suspend fun childrenCompletedAt(parentId: String, at: Long): List<TaskEntity>
+
+    @Query("SELECT COUNT(*) FROM task_items WHERE parentId = :parentId AND deletedAt IS NULL")
+    suspend fun countLiveChildren(parentId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: TaskEntity)
 
@@ -218,7 +237,7 @@ interface ChecklistDao {
         InboxEntity::class, TaskEntity::class, CategoryEntity::class, RescheduleEntity::class,
         SeriesEntity::class, HabitEntity::class, HabitCheckinEntity::class, ChecklistItemEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class PulsoDatabase : RoomDatabase() {
@@ -232,7 +251,7 @@ abstract class PulsoDatabase : RoomDatabase() {
     abstract fun checklistDao(): ChecklistDao
 
     companion object {
-        val ALL_MIGRATIONS: Array<Migration> = arrayOf(Migration1To2, Migration2To3)
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(Migration1To2, Migration2To3, Migration3To4)
     }
 }
 
@@ -281,6 +300,17 @@ object Migration2To3 : Migration(2, 3) {
             text TEXT NOT NULL, position INTEGER NOT NULL, checkedAt INTEGER, createdAt INTEGER NOT NULL,
             updatedAt INTEGER NOT NULL, deletedAt INTEGER, PRIMARY KEY(id))""")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_checklist_items_taskId ON checklist_items (taskId)")
+    }
+}
+
+/**
+ * v3 -> v4: subtasks (SPEC 015, ADR 0009). Purely additive: one nullable column and its index.
+ * Existing tasks keep `parentId = NULL` (independent), no row is rewritten.
+ */
+object Migration3To4 : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE task_items ADD COLUMN parentId TEXT")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_task_items_parentId ON task_items (parentId)")
     }
 }
 

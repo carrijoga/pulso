@@ -4,6 +4,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
+import dev.pulso.app.domain.SubtaskRules
 import dev.pulso.app.domain.TaskDraft
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -130,6 +132,8 @@ class BackupServiceTest {
         assertEquals(2, v3.tasks); assertEquals(2, v3.habits); assertEquals(1, v3.series)
         assertEquals(2, v3.checkins); assertEquals(2, v3.checklistItems)
         assertEquals(5, target.taskDao().allForBackup().size)
+        // v1-v3 files have no parentId: every task imports as independent (SPEC 015).
+        assertTrue(target.taskDao().allForBackup().all { it.parentId == null })
     }
 
     @Test fun versionNewerThanSupportedIsRejectedWithSpecificMessageAndWritesNothing() = runTest {
@@ -190,6 +194,40 @@ class BackupServiceTest {
         assertEquals(0, summary.checkins)
         val rows = target.habitCheckinDao().allForBackup()
         assertEquals(1, rows.size); assertEquals("local", rows.single().id)
+    }
+
+    @Test fun v4RoundTripKeepsParentLinksAndIsIdempotent() = runTest {
+        val repo = LocalTaskRepository(source, { clock.millis }, RecordingListener())
+        repo.createTask(TaskDraft("Casamento"))
+        val mother = repo.observeTasks().first().single().id
+        repo.createTask(TaskDraft("Buffet", parentId = mother))
+        val json = BackupService(source, RecordingListener()).exportJson()
+        assertEquals(4, JSONObject(json).getInt("version"))
+
+        val importer = BackupService(target, RecordingListener())
+        assertEquals(2, importer.importJson(json).tasks)
+        assertEquals(mother, target.taskDao().allForBackup().first { it.title == "Buffet" }.parentId)
+        assertEquals(0, importer.importJson(json).tasks)
+    }
+
+    @Test fun subtaskLinksAreValidatedBeforeAnyWrite() = runTest {
+        fun row(id: String, parent: String?, deleted: Boolean = false) = task(id, "T$id")
+            .put("parentId", parent ?: JSONObject.NULL).apply { if (deleted) put("deletedAt", 5) }
+        fun file(vararg rows: JSONObject) = JSONObject().put("format", "pulso-backup").put("version", 4)
+            .put("inbox", JSONArray()).put("tasks", JSONArray().apply { rows.forEach { put(it) } }).toString()
+        val cases = mapOf(
+            file(row("a", "nao-existe")) to SubtaskRules.MISSING_PARENT,
+            file(row("a", "a")) to SubtaskRules.CYCLE,
+            file(row("a", "b"), row("b", "a")) to SubtaskRules.CYCLE,
+            file(row("m", null), row("s", "m"), row("n", "s")) to SubtaskRules.TWO_LEVELS,
+            file(row("m", null, deleted = true), row("c", "m")) to SubtaskRules.POINTS_TO_DELETED,
+        )
+        cases.forEach { (raw, message) ->
+            val failure = runCatching { BackupService(target, RecordingListener()).importJson(raw) }.exceptionOrNull()
+            assertTrue("should reject: $raw", failure is IllegalArgumentException)
+            assertEquals(message, failure!!.message)
+        }
+        assertTrue(target.taskDao().allForBackup().isEmpty())
     }
 
     @Test fun importsThousandTasks() = runTest {
