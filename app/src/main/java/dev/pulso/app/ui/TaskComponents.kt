@@ -458,10 +458,11 @@ fun TaskEditorDialog(
         AlertDialog(onDismissRequest = { confirmDelete = false },
             title = { Text("Excluir tarefa?") },
             text = {
+                // Subtasks leave with their mother in every delete option (SPEC 015): say how many.
+                val subtaskNote = existing?.subtaskTotal?.takeIf { it > 0 }?.let { " Também saem ${subtasksText(it)}." }.orEmpty()
                 Text(if (repeating) "\"${text.trim()}\" se repete. \"Excluir só esta\" remove esta ocorrência e mantém a próxima. " +
-                    "\"Encerrar repetição\" remove esta ocorrência e não cria mais nenhuma."
-                else "\"${text.trim()}\" sai das listas.${existing?.subtaskTotal?.takeIf { it > 0 }
-                    ?.let { " Também saem ${subtasksText(it)}." }.orEmpty()} Você pode desfazer logo em seguida.")
+                    "\"Encerrar repetição\" remove esta ocorrência e não cria mais nenhuma.$subtaskNote"
+                else "\"${text.trim()}\" sai das listas.$subtaskNote Você pode desfazer logo em seguida.")
             },
             confirmButton = {
                 // Stacked vertically so the labels do not overflow at 200% font size.
@@ -487,6 +488,10 @@ private fun ParentPicker(choice: String?, onChoice: (String?) -> Unit, candidate
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FilterChip(selected = choice == null, onClick = { onChoice(null) }, label = { Text("Nenhuma") })
+        // A mother that is no longer listed (deleted) still shows as selected, so no chip is silently lost.
+        if (choice != null && candidates.none { it.id == choice }) {
+            FilterChip(selected = true, onClick = { onChoice(choice) }, label = { Text("Tarefa mãe atual") })
+        }
         candidates.forEach { mother ->
             FilterChip(selected = choice == mother.id, onClick = { onChoice(mother.id) },
                 label = { Text(mother.title, maxLines = 1, overflow = TextOverflow.Ellipsis) })

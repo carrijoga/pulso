@@ -105,6 +105,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pulso.app.CaptureActivity
+import androidx.compose.runtime.key
 import dev.pulso.app.domain.InboxItem
 import dev.pulso.app.domain.ReviewRules
 import dev.pulso.app.domain.SubtaskRules
@@ -342,10 +343,14 @@ fun PulsoScreens(vm: PulsoViewModel) {
             checklist = if (existing != null) remember(existing.id) { vm.checklist(existing.id) }
                 else remember { kotlinx.coroutines.flow.flowOf(emptyList()) },
             checklistHandler = existing?.let { vm.checklistHandler(it) },
-            parentCandidates = state.tasks.filter { it.parentId == null && !it.isCompleted && it.id != existing?.id },
+            // The current mother stays selectable even when it is completed (SPEC 015 picker).
+            parentCandidates = state.tasks.filter { it.parentId == null && it.id != existing?.id &&
+                (!it.isCompleted || it.id == initial.parentId) },
             subtasks = existing?.let { task -> state.tasks.filter { it.parentId == task.id } }.orEmpty(),
             onOpenEditor = { editorKey = it }, onDetachSubtask = vm::detachSubtask)
     }
+    // Keyed by the editor: another task never inherits this one's field state (SPEC 015, editor of a subtask).
+    key(editorKey) {
     when (editor) {
         is Editor.NewTask -> common(TaskDraft(title = "",
                 category = editor.category ?: TaskRules.DEFAULT_CATEGORY,
@@ -371,6 +376,7 @@ fun PulsoScreens(vm: PulsoViewModel) {
             }
         }
         null -> Unit
+    }
     }
 }
 

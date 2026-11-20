@@ -121,6 +121,15 @@ class SubtaskRulesTest {
         assertNull(SubtaskRules.importError(local, listOf(link("c", "m", deleted = true))))
     }
 
+    @Test fun importRejectsALiveSubtaskWhoseRepetitionIsStillLive() {
+        val local = listOf(link("m"))
+        assertEquals(SubtaskRules.REPEATING_SUBTASK,
+            SubtaskRules.importError(local, listOf(SubtaskLink("c", "m", deleted = false, repeats = true))))
+        // Deleted rows and subtasks whose series ended are history, not a live repetition.
+        assertNull(SubtaskRules.importError(local, listOf(SubtaskLink("c", "m", deleted = true, repeats = true))))
+        assertNull(SubtaskRules.importError(local, listOf(SubtaskLink("c", "m", deleted = false, repeats = false))))
+    }
+
     @Test fun importUsesTheLocalRowWhenTheIdAlreadyExists() {
         // The local "m" is a subtask already; the file's "m" is ignored by the additive import, so the chain is two levels.
         val local = listOf(link("x"), link("m", "x"))

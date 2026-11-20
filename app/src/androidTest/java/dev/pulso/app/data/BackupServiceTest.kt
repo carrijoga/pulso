@@ -103,11 +103,11 @@ class BackupServiceTest {
         db.checklistDao().upsert(ChecklistItemEntity("k1", "t1", "Item", 0, now(), now(), now()))
     }
 
-    @Test fun v3RoundTripCarriesSeriesHabitsCheckinsAndChecklistAndIsIdempotent() = runTest {
+    @Test fun v4RoundTripCarriesSeriesHabitsCheckinsAndChecklistAndIsIdempotent() = runTest {
         seed(source)
         val json = BackupService(source, RecordingListener(), appVersionName = "9.9").exportJson()
         val header = JSONObject(json)
-        assertEquals(3, header.getInt("version")); assertEquals(3, header.getInt("schemaVersion"))
+        assertEquals(4, header.getInt("version")); assertEquals(4, header.getInt("schemaVersion"))
         assertEquals("9.9", header.getString("appVersionName")); assertTrue(header.has("exportedAt"))
 
         val importer = BackupService(target, RecordingListener())
@@ -137,7 +137,7 @@ class BackupServiceTest {
     }
 
     @Test fun versionNewerThanSupportedIsRejectedWithSpecificMessageAndWritesNothing() = runTest {
-        val raw = JSONObject(fixture("backup-v3.json")).put("version", 4).toString()
+        val raw = JSONObject(fixture("backup-v3.json")).put("version", 5).toString()
         val failure = runCatching { BackupService(target, RecordingListener()).importJson(raw) }.exceptionOrNull()
         assertTrue(failure is IllegalArgumentException)
         assertTrue(failure!!.message!!.contains("versão mais nova"))
@@ -228,6 +228,26 @@ class BackupServiceTest {
             assertEquals(message, failure!!.message)
         }
         assertTrue(target.taskDao().allForBackup().isEmpty())
+    }
+
+    /** A mother and one subtask; the subtask's series is live or ended depending on [ended]. */
+    private fun repeatingSubtaskFile(ended: Boolean): String {
+        val series = JSONObject().put("id", "s1").put("frequency", "DAILY").put("repeatInterval", 1)
+            .put("daysOfWeek", 0).put("basis", "SCHEDULE").put("anchorDueAt", 1).put("createdAt", 1)
+            .put("updatedAt", 1).put("deletedAt", JSONObject.NULL).apply { if (ended) put("deletedAt", 5) }
+        val child = task("c", "Buffet").put("parentId", "m").put("seriesId", "s1")
+        return JSONObject().put("format", "pulso-backup").put("version", 4).put("inbox", JSONArray())
+            .put("tasks", JSONArray().put(task("m", "Casamento")).put(child))
+            .put("series", JSONArray().put(series)).toString()
+    }
+
+    @Test fun liveSubtaskThatStillRepeatsIsRejectedButEndedRepetitionIsKept() = runTest {
+        val failure = runCatching { BackupService(target, RecordingListener()).importJson(repeatingSubtaskFile(ended = false)) }
+            .exceptionOrNull()
+        assertEquals(SubtaskRules.REPEATING_SUBTASK, failure?.message)
+        assertTrue(target.taskDao().allForBackup().isEmpty())
+        // History of a subtask whose repetition ended is valid (ADR 0009): the whole file imports.
+        assertEquals(2, BackupService(target, RecordingListener()).importJson(repeatingSubtaskFile(ended = true)).tasks)
     }
 
     @Test fun importsThousandTasks() = runTest {

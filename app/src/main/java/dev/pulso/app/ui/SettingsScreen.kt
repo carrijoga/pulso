@@ -183,7 +183,7 @@ fun SettingsScreen(
         }
 
         SettingsSection("Backup", Icons.Rounded.Backup) {
-            Button(onClick = { save.launch("pulso-backup-v3-${java.time.LocalDate.now()}.json") }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { save.launch("pulso-backup-v4-${java.time.LocalDate.now()}.json") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Exportar backup JSON")
             }
             OutlinedButton(onClick = { load.launch(arrayOf("application/json", "text/plain", "*/*")) },

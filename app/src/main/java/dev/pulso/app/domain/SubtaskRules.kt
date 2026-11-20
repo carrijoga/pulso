@@ -5,8 +5,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-/** A row's link to its mother, as the backup validation sees it (no Room types here). */
-data class SubtaskLink(val id: String, val parentId: String?, val deleted: Boolean)
+/**
+ * A row's link to its mother, as the backup validation sees it (no Room types here). [repeats] is true when
+ * the row's series is still live: a subtask whose repetition ended keeps its seriesId as history and is valid.
+ */
+data class SubtaskLink(val id: String, val parentId: String?, val deleted: Boolean, val repeats: Boolean = false)
 
 /** One line of a task list: a task, and whether it is shown under its mother. */
 data class ListRow(val task: TaskItem, val indented: Boolean)
@@ -20,6 +23,7 @@ object SubtaskRules {
     const val CYCLE = "Backup inconsistente: ciclo entre subtarefas."
     const val TWO_LEVELS = "Backup inconsistente: subtarefa com mais de um nível."
     const val POINTS_TO_DELETED = "Backup inconsistente: subtarefa aponta para tarefa excluída."
+    const val REPEATING_SUBTASK = "Backup inconsistente: subtarefa com repetição ativa."
 
     /** The mother as the rules see it. */
     data class Parent(val id: String, val isSubtask: Boolean, val deleted: Boolean)
@@ -97,6 +101,7 @@ object SubtaskRules {
         val effective = (local + fresh).associateBy { it.id }
         for (row in fresh) {
             val parentId = row.parentId ?: continue
+            if (!row.deleted && row.repeats) return REPEATING_SUBTASK
             val parent = effective[parentId] ?: return MISSING_PARENT
             when {
                 parentId == row.id || parent.parentId == row.id -> return CYCLE

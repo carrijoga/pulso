@@ -114,6 +114,11 @@ class BackupService(
             val seriesIds = existingSeries + parsed.series.map { it.id }
             val habitIds = existingHabits + parsed.habits.map { it.id }
             val localTasks = database.taskDao().allForBackup()
+            // Series that stay live after the import: local rows win over the file's (additive import).
+            val localSeries = database.seriesDao().allForBackup()
+            val localSeriesIds = localSeries.map { it.id }.toSet()
+            val liveSeriesIds = localSeries.filter { it.deletedAt == null }.map { it.id }.toSet() +
+                parsed.series.filter { it.deletedAt == null && it.id !in localSeriesIds }.map { it.id }
             val taskIds = localTasks.map { it.id }.toSet() + parsed.tasks.map { it.id }
             require(parsed.tasks.all { it.seriesId == null || it.seriesId in seriesIds } &&
                 parsed.checkins.all { it.habitId in habitIds } &&
@@ -121,7 +126,9 @@ class BackupService(
             // SPEC 015: one level, no cycles, parents that exist, no live subtask under a deleted mother.
             SubtaskRules.importError(
                 local = localTasks.map { SubtaskLink(it.id, it.parentId, it.deletedAt != null) },
-                incoming = parsed.tasks.map { SubtaskLink(it.id, it.parentId, it.deletedAt != null) },
+                incoming = parsed.tasks.map {
+                    SubtaskLink(it.id, it.parentId, it.deletedAt != null, repeats = it.seriesId in liveSeriesIds)
+                },
             )?.let { throw IllegalArgumentException(it) }
 
             database.inboxDao().importUnseen(parsed.inbox)
